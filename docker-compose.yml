@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mariadb:11
+    container_name: devhire-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: devhire
+      MARIADB_USER: devhire
+      MARIADB_PASSWORD: devhire
+      MARIADB_ROOT_PASSWORD: root
+    volumes:
+      - devhire_db:/var/lib/mysql
+
+  wordpress:
+    image: wordpress:latest
+    container_name: devhire-wordpress
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: devhire
+      WORDPRESS_DB_USER: devhire
+      WORDPRESS_DB_PASSWORD: devhire
+      WORDPRESS_DEBUG: 1
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wordpress/wp-content/themes/devhire:/var/www/html/wp-content/themes/devhire
+      - ./wordpress/wp-content/plugins/devhire-core:/var/www/html/wp-content/plugins/devhire-core
+
+volumes:
+  devhire_db:
+  wordpress_data:
