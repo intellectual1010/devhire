@@ -272,18 +272,40 @@ $popular_skills = get_terms([
 
                             <div class="job-company-icon">
 
-                                <?php
-                                echo esc_html(
-                                    strtoupper(
-                                        substr(
-                                            $company_name
-                                                ?: get_the_title(),
-                                            0,
-                                            1
+                                <?php if (
+                                    $company_id &&
+                                    has_post_thumbnail($company_id)
+                                ) : ?>
+
+                                    <?php
+                                    echo get_the_post_thumbnail(
+                                        $company_id,
+                                        'thumbnail',
+                                        [
+                                            'class' => 'company-logo-image',
+                                            'alt'   => $company_name
+                                                ? $company_name . ' logo'
+                                                : 'Company logo',
+                                        ]
+                                    );
+                                    ?>
+
+                                <?php else : ?>
+
+                                    <?php
+                                    echo esc_html(
+                                        strtoupper(
+                                            substr(
+                                                $company_name
+                                                    ?: get_the_title(),
+                                                0,
+                                                1
+                                            )
                                         )
-                                    )
-                                );
-                                ?>
+                                    );
+                                    ?>
+
+                                <?php endif; ?>
 
                             </div>
 

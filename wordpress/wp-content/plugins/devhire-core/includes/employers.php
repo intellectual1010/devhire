@@ -1006,35 +1006,69 @@ function devhire_employer_dashboard_shortcode() {
 
             <div class="employer-company-summary">
 
-                <div>
-                    <span class="application-job-label">
-                        Company
-                    </span>
+                <div class="company-heading">
 
-                    <h2>
-                        <?php echo esc_html($company_name); ?>
-                    </h2>
+                    <div class="company-profile-logo">
+                        <?php if (has_post_thumbnail($company_id)) : ?>
 
-                    <?php if (
-                        $company_industry ||
-                        $company_location
-                    ) : ?>
-
-                        <p>
                             <?php
-                            echo esc_html(
-                                implode(
-                                    ' · ',
-                                    array_filter([
-                                        $company_industry,
-                                        $company_location,
-                                    ])
-                                )
+                            echo get_the_post_thumbnail(
+                                $company_id,
+                                'thumbnail',
+                                [
+                                    'class'   => 'company-logo-image',
+                                    'alt'     => $company_name,
+                                    'loading' => 'lazy',
+                                ]
                             );
                             ?>
-                        </p>
 
-                    <?php endif; ?>
+                        <?php else : ?>
+
+                            <span aria-hidden="true">
+                                <?php
+                                echo esc_html(
+                                    strtoupper(
+                                        substr($company_name, 0, 1)
+                                    )
+                                );
+                                ?>
+                            </span>
+
+                        <?php endif; ?>
+                    </div>
+
+                    <div>
+                        <span class="application-job-label">
+                            Company
+                        </span>
+
+                        <h2>
+                            <?php echo esc_html($company_name); ?>
+                        </h2>
+
+                        <?php if (
+                            $company_industry ||
+                            $company_location
+                        ) : ?>
+
+                            <p>
+                                <?php
+                                echo esc_html(
+                                    implode(
+                                        ' · ',
+                                        array_filter([
+                                            $company_industry,
+                                            $company_location,
+                                        ])
+                                    )
+                                );
+                                ?>
+                            </p>
+
+                        <?php endif; ?>
+                    </div>
+
                 </div>
 
                 <div class="application-card-actions">
@@ -1924,7 +1958,28 @@ function devhire_employer_post_job_shortcode() {
 
         <div class="employer-company-summary">
 
-            <div>
+            <div class="employer-company-summary-logo" aria-hidden="true">
+                <?php if (has_post_thumbnail($company_id)) : ?>
+                    <?php
+                    echo get_the_post_thumbnail(
+                        $company_id,
+                        'thumbnail',
+                        [
+                            'class' => 'company-logo-image',
+                            'alt'   => '',
+                        ]
+                    );
+                    ?>
+                <?php else : ?>
+                    <span class="company-logo-fallback">
+                        <?php echo esc_html(
+                            strtoupper(substr($company_name, 0, 1))
+                        ); ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+
+            <div class="employer-company-summary-content">
                 <span class="application-job-label">
                     Posting as
                 </span>
@@ -2769,7 +2824,28 @@ function devhire_employer_edit_job_shortcode() {
 
             <div class="employer-company-summary">
 
-                <div>
+                <div class="employer-company-summary-logo" aria-hidden="true">
+                    <?php if (has_post_thumbnail($company_id)) : ?>
+                        <?php
+                        echo get_the_post_thumbnail(
+                            $company_id,
+                            'thumbnail',
+                            [
+                                'class' => 'company-logo-image',
+                                'alt'   => '',
+                            ]
+                        );
+                        ?>
+                    <?php else : ?>
+                        <span class="company-logo-fallback">
+                            <?php echo esc_html(
+                                strtoupper(substr($company_name, 0, 1))
+                            ); ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="employer-company-summary-content">
                     <span class="application-job-label">
                         Company
                     </span>
@@ -4546,6 +4622,158 @@ function devhire_handle_employer_company_profile() {
     );
 
     /*
+     * Company logo.
+     * The logo is stored as the company's featured image.
+     */
+    $remove_logo = isset($_POST['remove_company_logo'])
+        && $_POST['remove_company_logo'] === '1';
+
+    if ($remove_logo) {
+        delete_post_thumbnail($company_id);
+    }
+
+    if (
+        isset($_FILES['company_logo']) &&
+        is_array($_FILES['company_logo']) &&
+        isset($_FILES['company_logo']['error']) &&
+        (int) $_FILES['company_logo']['error'] !== UPLOAD_ERR_NO_FILE
+    ) {
+        $logo_error = (int) $_FILES['company_logo']['error'];
+
+        if ($logo_error !== UPLOAD_ERR_OK) {
+            wp_safe_redirect(
+                add_query_arg(
+                    'company_error',
+                    'logo_upload_failed',
+                    home_url('/employer-company-profile/')
+                )
+            );
+            exit;
+        }
+
+        $logo_size = isset($_FILES['company_logo']['size'])
+            ? (int) $_FILES['company_logo']['size']
+            : 0;
+
+        if ($logo_size <= 0 || $logo_size > 2 * MB_IN_BYTES) {
+            wp_safe_redirect(
+                add_query_arg(
+                    'company_error',
+                    'logo_too_large',
+                    home_url('/employer-company-profile/')
+                )
+            );
+            exit;
+        }
+
+        $logo_name = isset($_FILES['company_logo']['name'])
+            ? sanitize_file_name(
+                wp_unslash($_FILES['company_logo']['name'])
+            )
+            : '';
+
+        $logo_extension = strtolower(
+            (string) pathinfo(
+                $logo_name,
+                PATHINFO_EXTENSION
+            )
+        );
+
+        $allowed_extensions = [
+            'jpg',
+            'jpeg',
+            'png',
+            'webp',
+        ];
+
+        if (
+            !$logo_name ||
+            !in_array(
+                $logo_extension,
+                $allowed_extensions,
+                true
+            )
+        ) {
+            wp_safe_redirect(
+                add_query_arg(
+                    'company_error',
+                    'invalid_logo',
+                    home_url('/employer-company-profile/')
+                )
+            );
+            exit;
+        }
+
+        $file_check = wp_check_filetype_and_ext(
+            $_FILES['company_logo']['tmp_name'],
+            $logo_name,
+            [
+                'jpg|jpeg|jpe' => 'image/jpeg',
+                'png'          => 'image/png',
+                'webp'         => 'image/webp',
+            ]
+        );
+
+        $allowed_mimes = [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+        ];
+
+        if (
+            empty($file_check['type']) ||
+            !in_array(
+                $file_check['type'],
+                $allowed_mimes,
+                true
+            )
+        ) {
+            wp_safe_redirect(
+                add_query_arg(
+                    'company_error',
+                    'invalid_logo',
+                    home_url('/employer-company-profile/')
+                )
+            );
+            exit;
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $logo_id = media_handle_upload(
+            'company_logo',
+            $company_id,
+            [],
+            [
+                'test_form' => false,
+                'mimes'     => [
+                    'jpg|jpeg|jpe' => 'image/jpeg',
+                    'png'          => 'image/png',
+                    'webp'         => 'image/webp',
+                ],
+            ]
+        );
+
+        if (is_wp_error($logo_id)) {
+            wp_safe_redirect(
+                add_query_arg(
+                    'company_error',
+                    'logo_upload_failed',
+                    home_url('/employer-company-profile/')
+                )
+            );
+            exit;
+        }
+
+        set_post_thumbnail(
+            $company_id,
+            $logo_id
+        );
+    }
+
+    /*
      * Synchronize and repair all existing jobs owned by this employer.
      */
     devhire_sync_employer_jobs_to_company(
@@ -4749,11 +4977,30 @@ function devhire_employer_company_profile_shortcode() {
                 Unable to save the company profile. Please try again.
             </div>
 
+        <?php elseif ($error === 'logo_too_large') : ?>
+
+            <div class="devhire-notice error">
+                Company logo must be 2 MB or smaller.
+            </div>
+
+        <?php elseif ($error === 'invalid_logo') : ?>
+
+            <div class="devhire-notice error">
+                Company logo must be a JPG, PNG, or WebP image.
+            </div>
+
+        <?php elseif ($error === 'logo_upload_failed') : ?>
+
+            <div class="devhire-notice error">
+                Unable to upload the company logo. Please try again.
+            </div>
+
         <?php endif; ?>
 
         <form
             class="candidate-profile-form employer-company-form"
             method="post"
+            enctype="multipart/form-data"
             action="<?php echo esc_url(
                 admin_url('admin-post.php')
             ); ?>"
@@ -4841,6 +5088,57 @@ function devhire_employer_company_profile_shortcode() {
                     value="<?php echo esc_attr($size); ?>"
                     placeholder="51-200 employees"
                 >
+            </div>
+
+            <div class="form-field company-logo-field">
+
+                <label for="company-logo">
+                    Company Logo
+                </label>
+
+                <?php if (
+                    $company_id &&
+                    has_post_thumbnail($company_id)
+                ) : ?>
+
+                    <div class="company-logo-preview">
+                        <?php
+                        echo get_the_post_thumbnail(
+                            $company_id,
+                            'thumbnail',
+                            [
+                                'class' => 'company-logo-preview-image',
+                                'alt'   => $company_name
+                                    ? $company_name . ' logo'
+                                    : 'Company logo',
+                            ]
+                        );
+                        ?>
+
+                        <label class="company-logo-remove">
+                            <input
+                                type="checkbox"
+                                name="remove_company_logo"
+                                value="1"
+                            >
+                            Remove current logo
+                        </label>
+                    </div>
+
+                <?php endif; ?>
+
+                <input
+                    id="company-logo"
+                    name="company_logo"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                >
+
+                <small>
+                    JPG, PNG, or WebP. Maximum file size: 2 MB.
+                    Uploading a new image replaces the current logo.
+                </small>
+
             </div>
 
             <div class="form-field">

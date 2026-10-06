@@ -82,7 +82,25 @@ while (have_posts()) :
 
             <div class="company-logo-large">
 
-                <?php if ($company_name) : ?>
+                <?php if (
+                    $company_id &&
+                    has_post_thumbnail($company_id)
+                ) : ?>
+
+                    <?php
+                    echo get_the_post_thumbnail(
+                        $company_id,
+                        'thumbnail',
+                        [
+                            'class' => 'company-logo-image',
+                            'alt'   => $company_name
+                                ? $company_name . ' logo'
+                                : 'Company logo',
+                        ]
+                    );
+                    ?>
+
+                <?php elseif ($company_name) : ?>
 
                     <?php
                     echo esc_html(

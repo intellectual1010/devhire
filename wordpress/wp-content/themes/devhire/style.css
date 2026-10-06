@@ -3078,4 +3078,165 @@ a {
         width: 100%;
     }
 }
+/* ================================
+   Company Logo Polish
+================================ */
 
+/*
+ * Keep company logos consistent across job cards,
+ * job details, company pages, and employer portal cards.
+ */
+.job-company-icon,
+.company-logo-large,
+.company-profile-logo,
+.company-directory-logo {
+    overflow: hidden;
+    position: relative;
+}
+
+.job-company-icon .company-logo-image,
+.company-logo-large .company-logo-image,
+.company-profile-logo .company-logo-image,
+.company-directory-logo .company-logo-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Job listing + homepage job cards */
+.job-company-icon {
+    flex: 0 0 52px;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+}
+
+/* Single job page */
+.company-logo-large {
+    flex: 0 0 76px;
+    width: 76px;
+    height: 76px;
+    border-radius: 16px;
+}
+
+/* Single company page */
+.company-profile-logo {
+    flex: 0 0 80px;
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+}
+
+/* Company archive + homepage company cards */
+.company-directory-logo {
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+    border-radius: 12px;
+}
+
+/*
+ * Employer company logo components introduced by the
+ * employer company-profile workflow.
+ */
+.employer-company-logo,
+.employer-company-logo-preview,
+.employer-company-context-logo {
+    overflow: hidden;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid var(--border);
+    background: var(--surface-light);
+    color: var(--primary);
+
+    font-weight: 800;
+}
+
+.employer-company-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    font-size: 24px;
+}
+
+.employer-company-logo-preview {
+    width: 84px;
+    height: 84px;
+    border-radius: 16px;
+    font-size: 28px;
+}
+
+.employer-company-context-logo {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    font-size: 20px;
+}
+
+.employer-company-logo img,
+.employer-company-logo-preview img,
+.employer-company-context-logo img,
+.employer-company-logo .company-logo-image,
+.employer-company-logo-preview .company-logo-image,
+.employer-company-context-logo .company-logo-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Keep employer company information aligned with the logo. */
+.employer-company-summary-main,
+.employer-company-context,
+.employer-company-profile-preview {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+}
+
+.employer-company-summary-main > div:last-child,
+.employer-company-context > div:last-child,
+.employer-company-profile-preview > div:last-child {
+    min-width: 0;
+}
+
+/* Uploaded-logo preview inside the company profile form. */
+.employer-company-logo-preview {
+    margin-top: 8px;
+}
+
+/* Mobile logo sizing */
+@media (max-width: 600px) {
+    .company-logo-large {
+        flex-basis: 58px;
+        width: 58px;
+        height: 58px;
+        border-radius: 13px;
+    }
+
+    .company-profile-logo {
+        flex-basis: 60px;
+        width: 60px;
+        height: 60px;
+        border-radius: 13px;
+    }
+
+    .employer-company-logo {
+        width: 56px;
+        height: 56px;
+        border-radius: 12px;
+    }
+
+    .employer-company-context-logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 11px;
+    }
+}

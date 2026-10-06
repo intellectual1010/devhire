@@ -219,6 +219,31 @@ $jobs = new WP_Query($args);
                         get_the_ID(),
                         'job_location'
                     );
+
+                    $company_id = (int) get_post_meta(
+                        get_the_ID(),
+                        '_devhire_company',
+                        true
+                    );
+
+                    $company = $company_id
+                        ? get_post($company_id)
+                        : null;
+
+                    $company_name = (
+                        $company &&
+                        $company->post_type === 'company'
+                    )
+                        ? $company->post_title
+                        : '';
+
+                    $company_url = (
+                        $company_id &&
+                        $company_name &&
+                        get_post_status($company_id) === 'publish'
+                    )
+                        ? get_permalink($company_id)
+                        : '';
                     ?>
 
                     <article class="job-card">
@@ -226,13 +251,39 @@ $jobs = new WP_Query($args);
                         <div class="job-card-main">
 
                             <div class="job-company-icon">
-                                <?php
-                                echo esc_html(
-                                    strtoupper(
-                                        substr(get_the_title(), 0, 1)
-                                    )
-                                );
-                                ?>
+
+                                <?php if (
+                                    $company_id &&
+                                    has_post_thumbnail($company_id)
+                                ) : ?>
+
+                                    <?php
+                                    echo get_the_post_thumbnail(
+                                        $company_id,
+                                        'thumbnail',
+                                        [
+                                            'class' => 'company-logo-image',
+                                            'alt'   => $company_name
+                                                ? $company_name . ' logo'
+                                                : 'Company logo',
+                                        ]
+                                    );
+                                    ?>
+
+                                <?php else : ?>
+
+                                    <?php
+                                    $fallback_letter = $company_name
+                                        ? substr($company_name, 0, 1)
+                                        : substr(get_the_title(), 0, 1);
+
+                                    echo esc_html(
+                                        strtoupper($fallback_letter)
+                                    );
+                                    ?>
+
+                                <?php endif; ?>
+
                             </div>
 
                             <div class="job-content">
@@ -245,6 +296,32 @@ $jobs = new WP_Query($args);
                                                 <?php the_title(); ?>
                                             </a>
                                         </h2>
+
+                                        <?php if ($company_name) : ?>
+
+                                            <div class="job-company-name">
+
+                                                <?php if ($company_url) : ?>
+
+                                                    <a href="<?php echo esc_url(
+                                                        $company_url
+                                                    ); ?>">
+                                                        <?php echo esc_html(
+                                                            $company_name
+                                                        ); ?>
+                                                    </a>
+
+                                                <?php else : ?>
+
+                                                    <?php echo esc_html(
+                                                        $company_name
+                                                    ); ?>
+
+                                                <?php endif; ?>
+
+                                            </div>
+
+                                        <?php endif; ?>
 
                                         <div class="job-meta">
 
