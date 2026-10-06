@@ -3185,6 +3185,18 @@ function devhire_employer_view_application_shortcode() {
         true
     );
 
+    $candidate_title = get_post_meta(
+        $application_id,
+        '_devhire_candidate_title',
+        true
+    );
+
+    $candidate_location = get_post_meta(
+        $application_id,
+        '_devhire_candidate_location',
+        true
+    );
+
     $status = get_post_meta(
         $application_id,
         '_devhire_application_status',
@@ -3289,6 +3301,31 @@ function devhire_employer_view_application_shortcode() {
 
 
             <div class="application-detail-grid">
+
+                <?php if ($candidate_title) : ?>
+
+                    <div>
+                        <span>Professional Title</span>
+
+                        <strong>
+                            <?php echo esc_html($candidate_title); ?>
+                        </strong>
+                    </div>
+
+                <?php endif; ?>
+
+
+                <?php if ($candidate_location) : ?>
+
+                    <div>
+                        <span>Location</span>
+
+                        <strong>
+                            <?php echo esc_html($candidate_location); ?>
+                        </strong>
+                    </div>
+
+                <?php endif; ?>
 
                 <div>
                     <span>Email</span>

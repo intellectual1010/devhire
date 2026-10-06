@@ -5,6 +5,39 @@ if (!defined('ABSPATH')) {
 }
 
 /**
+ * Check whether a job application deadline has expired.
+ */
+function devhire_job_is_expired($job_id) {
+
+    $deadline = get_post_meta(
+        $job_id,
+        '_devhire_deadline',
+        true
+    );
+
+    if (!$deadline) {
+        return false;
+    }
+
+    $deadline_date = DateTimeImmutable::createFromFormat(
+        'Y-m-d H:i:s',
+        $deadline . ' 23:59:59',
+        wp_timezone()
+    );
+
+    if (!$deadline_date) {
+        return false;
+    }
+
+    $now = new DateTimeImmutable(
+        'now',
+        wp_timezone()
+    );
+
+    return $deadline_date < $now;
+}
+
+/**
  * Job Application Form shortcode.
  *
  * Usage:
@@ -17,6 +50,8 @@ function devhire_application_form_shortcode() {
     }
 
     $job_id = get_the_ID();
+
+    ob_start();
 
     $name     = '';
     $email    = '';
@@ -68,26 +103,20 @@ function devhire_application_form_shortcode() {
         true
     );
 
-    $is_expired = false;
+    $is_expired = devhire_job_is_expired($job_id);
+
+    $deadline_date = null;
 
     if ($deadline) {
-
-        $deadline_timestamp = strtotime(
-            $deadline . ' 23:59:59'
+        $deadline_date = DateTimeImmutable::createFromFormat(
+            'Y-m-d H:i:s',
+            $deadline . ' 23:59:59',
+            wp_timezone()
         );
-
-        if (
-            $deadline_timestamp &&
-            $deadline_timestamp < current_time('timestamp')
-        ) {
-            $is_expired = true;
-        }
     }
 
-    ob_start();
-    ?>
-
-    <?php if ($is_expired) : ?>
+    if ($is_expired) {
+        ?>
 
         <div class="application-closed">
 
@@ -102,9 +131,10 @@ function devhire_application_form_shortcode() {
                 <strong>
                     <?php
                     echo esc_html(
-                        date_i18n(
+                        wp_date(
                             get_option('date_format'),
-                            strtotime($deadline)
+                            $deadline_date->getTimestamp(),
+                            wp_timezone()
                         )
                     );
                     ?>
@@ -124,9 +154,197 @@ function devhire_application_form_shortcode() {
 
         <?php
         return ob_get_clean();
+    }
+
+    if (!is_user_logged_in()) {
         ?>
 
-    <?php endif; ?>
+        <div class="application-login-required">
+
+            <span class="application-login-badge">
+                Candidate Account Required
+            </span>
+
+            <h3>Sign in to apply for this job.</h3>
+
+            <p>
+                Create a free candidate account or sign in to submit
+                your application and track its progress.
+            </p>
+
+            <div class="form-actions">
+
+                <a
+                    href="<?php echo esc_url(
+                        home_url('/candidate-login/')
+                    ); ?>"
+                    class="primary-button"
+                >
+                    Candidate Login
+                </a>
+
+                <a
+                    href="<?php echo esc_url(
+                        home_url('/candidate-register/')
+                    ); ?>"
+                    class="secondary-button"
+                >
+                    Create Account
+                </a>
+
+            </div>
+
+        </div>
+
+        <?php
+        return ob_get_clean();
+    }
+
+    $current_user = wp_get_current_user();
+
+    if (!in_array('candidate', (array) $current_user->roles, true)) {
+        ?>
+
+        <div class="application-login-required">
+
+            <h3>Candidate account required.</h3>
+
+            <p>
+                Job applications can only be submitted using
+                a candidate account.
+            </p>
+
+        </div>
+
+        <?php
+        return ob_get_clean();
+    }
+
+    $already_applied = false;
+
+    $existing_application = get_posts([
+        'post_type'      => 'job_application',
+        'post_status'    => 'private',
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'meta_query'     => [
+            'relation' => 'AND',
+            [
+                'key'     => '_devhire_application_job',
+                'value'   => $job_id,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ],
+            [
+                'key'     => '_devhire_candidate_user',
+                'value'   => $current_user->ID,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ],
+        ],
+    ]);
+
+    $already_applied = !empty($existing_application);
+
+    $application_success = (
+        isset($_GET['application']) &&
+        sanitize_key(wp_unslash($_GET['application'])) === 'success'
+    );
+
+    if ($application_success && $already_applied) {
+        ?>
+
+        <div class="application-already-applied">
+
+            <span class="application-applied-badge">
+                Application Submitted
+            </span>
+
+            <h3>Your application was submitted successfully.</h3>
+
+            <p>
+                The employer can now review your application.
+                You can track its status from your candidate dashboard.
+            </p>
+
+            <a
+                href="<?php echo esc_url(
+                    home_url('/candidate-dashboard/')
+                ); ?>"
+                class="primary-button"
+            >
+                View Candidate Dashboard
+            </a>
+
+        </div>
+
+        <?php
+        return ob_get_clean();
+    }
+
+    if (!$resume_url) {
+        ?>
+
+        <div class="application-resume-required">
+
+            <span class="application-login-badge">
+                Resume Required
+            </span>
+
+            <h3>Add your resume before applying.</h3>
+
+            <p>
+                Complete your candidate profile and upload a resume
+                before submitting an application.
+            </p>
+
+            <a
+                href="<?php echo esc_url(
+                    home_url('/candidate-profile/')
+                ); ?>"
+                class="primary-button"
+            >
+                Complete Candidate Profile
+            </a>
+
+        </div>
+
+        <?php
+        return ob_get_clean();
+    }
+    ?>
+
+    <?php if ($already_applied) : ?>
+
+        <div class="application-already-applied">
+
+            <span class="application-applied-badge">
+                Application Submitted
+            </span>
+
+            <h3>You already applied to this job.</h3>
+
+            <p>
+                You can track the progress of your application
+                from your candidate dashboard.
+            </p>
+
+            <a
+                href="<?php echo esc_url(
+                    home_url('/candidate-dashboard/')
+                ); ?>"
+                class="primary-button"
+            >
+                View My Applications
+            </a>
+
+        </div>
+
+        <?php
+        return ob_get_clean();
+        ?>
+
+    <?php endif; ?>  
 
     <div
         class="devhire-application-form"
@@ -148,23 +366,6 @@ function devhire_application_form_shortcode() {
 
         <?php if (
             isset($_GET['application']) &&
-            $_GET['application'] === 'success'
-        ) : ?>
-
-            <div class="application-success">
-                <strong>Application submitted!</strong>
-
-                <p>
-                    Thank you. Your application has been
-                    received successfully.
-                </p>
-            </div>
-
-        <?php endif; ?>
-
-
-        <?php if (
-            isset($_GET['application']) &&
             $_GET['application'] === 'error'
         ) : ?>
 
@@ -181,7 +382,6 @@ function devhire_application_form_shortcode() {
 
         <form
             method="post"
-            enctype="multipart/form-data"
             action="<?php echo esc_url(
                 admin_url('admin-post.php')
             ); ?>"
@@ -209,64 +409,46 @@ function devhire_application_form_shortcode() {
 
             <div class="application-fields">
 
-                <div class="application-field">
+                <div class="application-full candidate-application-summary">
 
-                    <label for="applicant_name">
-                        Full Name *
-                    </label>
+                    <div>
+                        <span>Name</span>
+                        <strong><?php echo esc_html($name); ?></strong>
+                    </div>
 
-                    <input
-                        type="text"
-                        name="name"
-                        value="<?php echo esc_attr($name); ?>"
-                        required
+                    <div>
+                        <span>Email</span>
+                        <strong><?php echo esc_html($email); ?></strong>
+                    </div>
+
+                    <?php if ($phone) : ?>
+                        <div>
+                            <span>Phone</span>
+                            <strong><?php echo esc_html($phone); ?></strong>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($linkedin) : ?>
+                        <div>
+                            <span>LinkedIn / Portfolio</span>
+                            <a
+                                href="<?php echo esc_url($linkedin); ?>"
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                View Profile
+                            </a>
+                        </div>
+                    <?php endif; ?>
+
+                    <a
+                        href="<?php echo esc_url(
+                            home_url('/candidate-profile/')
+                        ); ?>"
+                        class="candidate-edit-profile"
                     >
-
-                </div>
-
-
-                <div class="application-field">
-
-                    <label for="applicant_email">
-                        Email Address *
-                    </label>
-
-                    <input
-                        type="email"
-                        name="email"
-                        value="<?php echo esc_attr($email); ?>"
-                        required
-                    >
-
-                </div>
-
-
-                <div class="application-field">
-
-                    <label for="applicant_phone">
-                        Phone
-                    </label>
-
-                    <input
-                        type="text"
-                        name="phone"
-                        value="<?php echo esc_attr($phone); ?>"
-                    >
-
-                </div>
-
-
-                <div class="application-field">
-
-                    <label for="applicant_linkedin">
-                        LinkedIn / Portfolio
-                    </label>
-
-                    <input
-                        type="url"
-                        name="linkedin"
-                        value="<?php echo esc_attr($linkedin); ?>"
-                    >
+                        Edit Candidate Profile
+                    </a>
 
                 </div>
 
@@ -303,39 +485,9 @@ function devhire_application_form_shortcode() {
                             </a>
                         </p>
 
-                        <label>
-                            <input
-                                type="checkbox"
-                                name="use_profile_resume"
-                                value="1"
-                                checked
-                            >
-                            Use my profile resume
-                        </label>
-
                     </div>
 
                 <?php endif; ?>
-
-                <div class="application-field application-full">
-
-                    <label for="applicant_resume">
-                        Resume *
-                    </label>
-
-                    <input
-                        id="applicant_resume"
-                        name="applicant_resume"
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                    >
-
-                    <small>
-                        PDF, DOC or DOCX. Maximum 5 MB.
-                    </small>
-
-                </div>
-
 
                 <!-- Honeypot -->
                 <div
@@ -452,62 +604,113 @@ function devhire_handle_application_submission() {
         exit;
     }
 
-    $deadline = get_post_meta(
-        $job_id,
-        '_devhire_deadline',
-        true
-    );
+    /*
+    * Only logged-in candidate accounts can apply.
+    */
+    if (!is_user_logged_in()) {
 
-    if ($deadline) {
-
-        $deadline_timestamp = strtotime(
-            $deadline . ' 23:59:59'
+        wp_safe_redirect(
+            add_query_arg(
+                'application_error',
+                'login_required',
+                home_url('/candidate-login/')
+            )
         );
 
-        if (
-            $deadline_timestamp &&
-            $deadline_timestamp < current_time('timestamp')
-        ) {
-
-            wp_safe_redirect(
-                add_query_arg(
-                    'application_error',
-                    'expired',
-                    get_permalink($job_id)
-                )
-            );
-
-            exit;
-        }
+        exit;
     }
 
+    $current_user = wp_get_current_user();
+
+    if (!in_array('candidate', (array) $current_user->roles, true)) {
+        wp_die('Only candidate accounts can submit job applications.');
+    }
+
+    /*
+     * Prevent applications after the job deadline.
+     */
+    if (devhire_job_is_expired($job_id)) {
+
+        wp_safe_redirect(
+            add_query_arg(
+                'application_error',
+                'expired',
+                get_permalink($job_id)
+            )
+        );
+
+        exit;
+    }
+
+    /*
+    * Prevent duplicate applications.
+    */
+
+    $existing_application = get_posts([
+        'post_type'      => 'job_application',
+        'post_status'    => 'private',
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'meta_query'     => [
+            'relation' => 'AND',
+            [
+                'key'     => '_devhire_application_job',
+                'value'   => $job_id,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ],
+            [
+                'key'     => '_devhire_candidate_user',
+                'value'   => $current_user->ID,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ],
+        ],
+    ]);
+
+    if (!empty($existing_application)) {
+
+        wp_safe_redirect(
+            add_query_arg(
+                'application_error',
+                'already_applied',
+                get_permalink($job_id)
+            )
+        );
+
+        exit;
+    }
 
     /*
      * Sanitize fields.
      */
-    $name = isset($_POST['name'])
-        ? sanitize_text_field(
-            wp_unslash($_POST['name'])
-        )
-        : '';
+    /*
+    * Name and email come from the authenticated
+    * candidate account, not submitted form values.
+    */
+    $name = sanitize_text_field(
+        $current_user->display_name
+    );
 
-    $email = isset($_POST['email'])
-        ? sanitize_email(
-            wp_unslash($_POST['email'])
-        )
-        : '';
+    $email = sanitize_email(
+        $current_user->user_email
+    );
 
-    $phone = isset($_POST['phone'])
-        ? sanitize_text_field(
-            wp_unslash($_POST['phone'])
+    $phone = sanitize_text_field(
+        get_user_meta(
+            $current_user->ID,
+            '_devhire_phone',
+            true
         )
-        : '';
+    );
 
-    $linkedin = isset($_POST['linkedin'])
-        ? esc_url_raw(
-            wp_unslash($_POST['linkedin'])
+    $linkedin = esc_url_raw(
+        get_user_meta(
+            $current_user->ID,
+            '_devhire_linkedin',
+            true
         )
-        : '';
+    );
 
     $message = isset($_POST['applicant_message'])
         ? sanitize_textarea_field(
@@ -538,171 +741,48 @@ function devhire_handle_application_submission() {
 
 
     /*
-    * Resolve application resume.
+    * Get resume from the authenticated candidate profile.
     */
-    $resume_url = '';
+    $resume_id = absint(
+        get_user_meta(
+            $current_user->ID,
+            '_devhire_resume_id',
+            true
+        )
+    );
 
-    $use_profile_resume =
-        isset($_POST['use_profile_resume']) &&
-        sanitize_text_field(
-            wp_unslash($_POST['use_profile_resume'])
-        ) === '1';
+    $resume_url = $resume_id
+        ? wp_get_attachment_url($resume_id)
+        : '';
 
+    if (!$resume_url) {
 
-    /*
-    * Use the logged-in candidate's profile resume.
-    */
-    if (
-        $use_profile_resume &&
-        is_user_logged_in()
-    ) {
-
-        $profile_resume_id = absint(
-            get_user_meta(
-                get_current_user_id(),
-                '_devhire_resume_id',
-                true
+        wp_safe_redirect(
+            add_query_arg(
+                'application_error',
+                'resume_required',
+                home_url('/candidate-profile/')
             )
         );
 
-        if ($profile_resume_id) {
-
-            $profile_resume_url =
-                wp_get_attachment_url(
-                    $profile_resume_id
-                );
-
-            if ($profile_resume_url) {
-                $resume_url =
-                    $profile_resume_url;
-            }
-        }
+        exit;
     }
 
+    $candidate_title = sanitize_text_field(
+        get_user_meta(
+            $current_user->ID,
+            '_devhire_professional_title',
+            true
+        )
+    );
 
-    /*
-    * If no profile resume was selected,
-    * process a newly uploaded resume.
-    */
-    if (!$resume_url) {
-
-        if (
-            empty($_FILES['applicant_resume']) ||
-            !isset(
-                $_FILES['applicant_resume']['error']
-            ) ||
-            $_FILES['applicant_resume']['error']
-                !== UPLOAD_ERR_OK
-        ) {
-
-            wp_safe_redirect(
-                add_query_arg(
-                    'application',
-                    'error',
-                    $job_url
-                )
-            );
-
-            exit;
-        }
-
-
-        $resume =
-            $_FILES['applicant_resume'];
-
-
-        /*
-        * Maximum 5 MB.
-        */
-        if (
-            $resume['size'] >
-            5 * 1024 * 1024
-        ) {
-
-            wp_safe_redirect(
-                add_query_arg(
-                    'application',
-                    'error',
-                    $job_url
-                )
-            );
-
-            exit;
-        }
-
-
-        $allowed_mimes = [
-            'pdf' =>
-                'application/pdf',
-
-            'doc' =>
-                'application/msword',
-
-            'docx' =>
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ];
-
-
-        $file_check =
-            wp_check_filetype_and_ext(
-                $resume['tmp_name'],
-                $resume['name'],
-                $allowed_mimes
-            );
-
-
-        if (
-            empty($file_check['ext']) ||
-            empty($file_check['type'])
-        ) {
-
-            wp_safe_redirect(
-                add_query_arg(
-                    'application',
-                    'error',
-                    $job_url
-                )
-            );
-
-            exit;
-        }
-
-
-        require_once ABSPATH .
-            'wp-admin/includes/file.php';
-
-
-        $uploaded_file =
-            wp_handle_upload(
-                $resume,
-                [
-                    'test_form' => false,
-                    'mimes'     => $allowed_mimes,
-                ]
-            );
-
-
-        if (
-            isset($uploaded_file['error']) ||
-            empty($uploaded_file['url'])
-        ) {
-
-            wp_safe_redirect(
-                add_query_arg(
-                    'application',
-                    'error',
-                    $job_url
-                )
-            );
-
-            exit;
-        }
-
-
-        $resume_url =
-            $uploaded_file['url'];
-    }
-
+    $candidate_location = sanitize_text_field(
+        get_user_meta(
+            $current_user->ID,
+            '_devhire_location',
+            true
+        )
+    );
 
     /*
      * Create private application record.
@@ -753,15 +833,11 @@ function devhire_handle_application_submission() {
         $email
     );
 
-    if (is_user_logged_in()) {
-
-        update_post_meta(
-            $application_id,
-            '_devhire_candidate_user',
-            get_current_user_id()
-        );
-
-    }
+    update_post_meta(
+        $application_id,
+        '_devhire_candidate_user',
+        $current_user->ID
+    );
 
     update_post_meta(
         $application_id,
@@ -789,10 +865,27 @@ function devhire_handle_application_submission() {
 
     update_post_meta(
         $application_id,
+        '_devhire_applicant_resume_id',
+        $resume_id
+    );
+
+    update_post_meta(
+        $application_id,
         '_devhire_application_status',
         'New'
     );
 
+    update_post_meta(
+        $application_id,
+        '_devhire_candidate_title',
+        $candidate_title
+    );
+
+    update_post_meta(
+        $application_id,
+        '_devhire_candidate_location',
+        $candidate_location
+    );
 
     /*
      * Success.
@@ -1118,6 +1211,18 @@ function devhire_application_details_callback($post) {
         true
     );
 
+    $candidate_title = get_post_meta(
+        $post->ID,
+        '_devhire_candidate_title',
+        true
+    );
+
+    $candidate_location = get_post_meta(
+        $post->ID,
+        '_devhire_candidate_location',
+        true
+    );
+
     $status = get_post_meta(
         $post->ID,
         '_devhire_application_status',
@@ -1218,6 +1323,36 @@ function devhire_application_details_callback($post) {
 
             <div class="devhire-admin-value">
                 <?php echo esc_html($name); ?>
+            </div>
+
+        </div>
+
+
+        <div class="devhire-admin-field">
+
+            <span class="devhire-admin-label">
+                Professional Title
+            </span>
+
+            <div class="devhire-admin-value">
+                <?php echo $candidate_title
+                    ? esc_html($candidate_title)
+                    : '—'; ?>
+            </div>
+
+        </div>
+
+
+        <div class="devhire-admin-field">
+
+            <span class="devhire-admin-label">
+                Location
+            </span>
+
+            <div class="devhire-admin-value">
+                <?php echo $candidate_location
+                    ? esc_html($candidate_location)
+                    : '—'; ?>
             </div>
 
         </div>
