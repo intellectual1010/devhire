@@ -1022,6 +1022,19 @@ function devhire_handle_application_submission() {
         'New'
     );
 
+
+    update_post_meta(
+        $application_id,
+        '_devhire_application_history',
+        [
+            [
+                'status' => 'New',
+                'timestamp' => current_time('timestamp'),
+                'changed_by' => $current_user->ID,
+            ],
+        ]
+    );
+
     update_post_meta(
         $application_id,
         '_devhire_candidate_title',

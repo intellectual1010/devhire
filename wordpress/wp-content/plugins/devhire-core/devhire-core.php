@@ -44,6 +44,33 @@ require_once DEVHIRE_CORE_PATH . 'includes/employers.php';
 
 
 /**
+ * Front-end plugin assets.
+ */
+function devhire_core_enqueue_assets() {
+
+    /*
+     * Bulk applicant controls are only needed on the
+     * Employer Applicants page.
+     */
+    if (is_page('employer-applicants')) {
+
+        wp_enqueue_script(
+            'devhire-applicant-bulk',
+            DEVHIRE_CORE_URL . 'assets/js/applicant-bulk.js',
+            [],
+            DEVHIRE_CORE_VERSION,
+            true
+        );
+    }
+}
+
+add_action(
+    'wp_enqueue_scripts',
+    'devhire_core_enqueue_assets'
+);
+
+
+/**
  * Plugin activation.
  */
 function devhire_core_activate() {

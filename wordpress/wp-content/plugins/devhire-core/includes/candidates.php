@@ -1297,9 +1297,24 @@ function devhire_candidate_dashboard_shortcode() {
                                 )
                             )
                         );
+                    $candidate_workflow_statuses = [
+                        'New',
+                        'Reviewing',
+                        'Interview',
+                        'Hired',
+                    ];
+
+                    $candidate_workflow_index = array_search(
+                        $status,
+                        $candidate_workflow_statuses,
+                        true
+                    );
+
+                    $candidate_is_rejected =
+                        $status === 'Rejected';
                     ?>
 
-                    <article class="application-card">
+                    <article class="application-card candidate-application-card">
 
                         <div>
 
@@ -1371,6 +1386,124 @@ function devhire_candidate_dashboard_shortcode() {
 
                         </span>
 
+                        <div class="candidate-application-actions">
+
+                            <a
+                                class="secondary-button"
+                                href="<?php echo esc_url(
+                                    add_query_arg(
+                                        'application_id',
+                                        $application_id,
+                                        home_url(
+                                            '/candidate-application/'
+                                        )
+                                    )
+                                ); ?>"
+                            >
+                                View Application
+                            </a>
+
+                        </div>
+
+                        <div class="candidate-application-progress">
+
+                            <div class="candidate-application-progress-line">
+
+                                <?php foreach (
+                                    $candidate_workflow_statuses
+                                    as $workflow_index => $workflow_status
+                                ) :
+
+                                    $step_class = 'upcoming';
+
+                                    if (!$candidate_is_rejected) {
+                                        if (
+                                            $workflow_index <
+                                            $candidate_workflow_index
+                                        ) {
+                                            $step_class = 'complete';
+                                        } elseif (
+                                            $workflow_index ===
+                                            $candidate_workflow_index
+                                        ) {
+                                            $step_class = 'current';
+                                        }
+                                    }
+                                    ?>
+
+                                    <div class="candidate-application-step <?php
+                                    echo esc_attr($step_class);
+                                    ?>">
+
+                                        <span aria-hidden="true">
+                                            <?php
+                                            echo esc_html(
+                                                $workflow_index + 1
+                                            );
+                                            ?>
+                                        </span>
+
+                                        <strong>
+                                            <?php
+                                            echo esc_html(
+                                                $workflow_status
+                                            );
+                                            ?>
+                                        </strong>
+
+                                    </div>
+
+                                <?php endforeach; ?>
+
+                            </div>
+
+                            <?php if (
+                                $candidate_is_rejected
+                            ) : ?>
+
+                                <p class="candidate-application-result rejected">
+                                    This application is no longer
+                                    moving forward.
+                                </p>
+
+                            <?php elseif (
+                                $status === 'Hired'
+                            ) : ?>
+
+                                <p class="candidate-application-result hired">
+                                    Congratulations — you have been
+                                    marked as hired for this position.
+                                </p>
+
+                            <?php elseif (
+                                $status === 'Interview'
+                            ) : ?>
+
+                                <p class="candidate-application-guidance">
+                                    Your application has reached the
+                                    interview stage.
+                                </p>
+
+                            <?php elseif (
+                                $status === 'Reviewing'
+                            ) : ?>
+
+                                <p class="candidate-application-guidance">
+                                    The employer is currently reviewing
+                                    your application.
+                                </p>
+
+                            <?php else : ?>
+
+                                <p class="candidate-application-guidance">
+                                    Your application has been submitted
+                                    successfully.
+                                </p>
+
+                            <?php endif; ?>
+
+                        </div>
+
                     </article>
 
                     <?php
@@ -1426,3 +1559,465 @@ add_shortcode(
     'devhire_candidate_dashboard',
     'devhire_candidate_dashboard_shortcode'
 );
+
+
+/**
+ * ============================================================
+ * Candidate - Application Detail
+ * ============================================================
+ */
+
+function devhire_candidate_application_detail_shortcode() {
+
+    if (!is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice error">
+                Please <a href="%s">sign in as a candidate</a>
+                to view your application.
+            </div>',
+            esc_url(home_url('/candidate-login/'))
+        );
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('candidate', (array) $user->roles, true)) {
+        return '<div class="devhire-notice error">
+            This page is available only to candidate accounts.
+        </div>';
+    }
+
+    $application_id = isset($_GET['application_id'])
+        ? absint($_GET['application_id'])
+        : 0;
+
+    $application = $application_id
+        ? get_post($application_id)
+        : null;
+
+    if (
+        !$application ||
+        $application->post_type !== 'job_application' ||
+        $application->post_status !== 'private'
+    ) {
+        return '<div class="devhire-notice error">
+            Application not found.
+        </div>';
+    }
+
+    $candidate_user_id = (int) get_post_meta(
+        $application_id,
+        '_devhire_candidate_user',
+        true
+    );
+
+    $applicant_email = get_post_meta(
+        $application_id,
+        '_devhire_applicant_email',
+        true
+    );
+
+    $owns_application =
+        $candidate_user_id === (int) $user->ID ||
+        (
+            !$candidate_user_id &&
+            $applicant_email &&
+            strtolower($applicant_email) ===
+            strtolower($user->user_email)
+        );
+
+    if (!$owns_application) {
+        return '<div class="devhire-notice error">
+            You do not have permission to view this application.
+        </div>';
+    }
+
+    $job_id = (int) get_post_meta(
+        $application_id,
+        '_devhire_application_job',
+        true
+    );
+
+    $status = get_post_meta(
+        $application_id,
+        '_devhire_application_status',
+        true
+    );
+
+    if (!$status) {
+        $status = 'New';
+    }
+
+    $job = $job_id ? get_post($job_id) : null;
+
+    $job_title = $job
+        ? get_the_title($job_id)
+        : 'Job unavailable';
+
+    $company_id = $job_id
+        ? (int) get_post_meta(
+            $job_id,
+            '_devhire_company',
+            true
+        )
+        : 0;
+
+    $company_name = $company_id
+        ? get_the_title($company_id)
+        : '';
+
+    $applied_date = get_the_date(
+        get_option('date_format'),
+        $application_id
+    );
+
+    $workflow_statuses = [
+        'New',
+        'Reviewing',
+        'Interview',
+        'Hired',
+    ];
+
+    $workflow_index = array_search(
+        $status,
+        $workflow_statuses,
+        true
+    );
+
+    $is_rejected = $status === 'Rejected';
+
+    $application_history = get_post_meta(
+        $application_id,
+        '_devhire_application_history',
+        true
+    );
+
+    if (!is_array($application_history)) {
+        $application_history = [];
+    }
+
+    if (empty($application_history)) {
+        $application_history[] = [
+            'status' => 'New',
+            'timestamp' => get_post_time(
+                'U',
+                true,
+                $application_id
+            ),
+        ];
+    }
+
+    ob_start();
+    ?>
+
+    <div class="candidate-dashboard candidate-application-detail-page">
+
+        <div class="candidate-dashboard-header">
+
+            <div>
+                <span class="hero-badge">
+                    Candidate Portal
+                </span>
+
+                <h1>Application Detail</h1>
+
+                <p>
+                    Track the current progress of your application.
+                </p>
+            </div>
+
+        </div>
+
+        <nav class="candidate-dashboard-nav">
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/candidate-dashboard/')
+                ); ?>"
+            >
+                My Applications
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/candidate-profile/')
+                ); ?>"
+            >
+                My Profile
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/saved-jobs/')
+                ); ?>"
+            >
+                Saved Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    get_post_type_archive_link('job')
+                ); ?>"
+            >
+                Browse Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link candidate-nav-logout"
+                href="<?php echo esc_url(
+                    wp_logout_url(home_url('/'))
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
+
+        <section class="candidate-application-detail-card">
+
+            <div class="candidate-application-detail-heading">
+
+                <div>
+                    <span class="application-label">
+                        Applied for
+                    </span>
+
+                    <h2>
+                        <?php echo esc_html($job_title); ?>
+                    </h2>
+
+                    <?php if ($company_name) : ?>
+                        <p>
+                            <?php echo esc_html($company_name); ?>
+                        </p>
+                    <?php endif; ?>
+
+                    <span class="application-date">
+                        Applied <?php echo esc_html($applied_date); ?>
+                    </span>
+                </div>
+
+                <span class="<?php
+                echo esc_attr(
+                    'application-status status-' .
+                    sanitize_html_class(
+                        strtolower(
+                            str_replace(' ', '-', $status)
+                        )
+                    )
+                );
+                ?>">
+                    <?php echo esc_html($status); ?>
+                </span>
+
+            </div>
+
+            <div class="candidate-application-progress">
+
+                <div class="candidate-application-progress-line">
+
+                    <?php foreach (
+                        $workflow_statuses
+                        as $step_index => $step_status
+                    ) :
+
+                        $step_class = 'upcoming';
+
+                        if (!$is_rejected) {
+                            if ($step_index < $workflow_index) {
+                                $step_class = 'complete';
+                            } elseif (
+                                $step_index === $workflow_index
+                            ) {
+                                $step_class = 'current';
+                            }
+                        }
+                        ?>
+
+                        <div class="candidate-application-step <?php
+                        echo esc_attr($step_class);
+                        ?>">
+
+                            <span aria-hidden="true">
+                                <?php echo esc_html($step_index + 1); ?>
+                            </span>
+
+                            <strong>
+                                <?php echo esc_html($step_status); ?>
+                            </strong>
+
+                        </div>
+
+                    <?php endforeach; ?>
+
+                </div>
+
+                <?php if ($is_rejected) : ?>
+
+                    <p class="candidate-application-result rejected">
+                        This application is no longer moving forward.
+                    </p>
+
+                <?php elseif ($status === 'Hired') : ?>
+
+                    <p class="candidate-application-result hired">
+                        Congratulations — you have been marked as
+                        hired for this position.
+                    </p>
+
+                <?php elseif ($status === 'Interview') : ?>
+
+                    <p class="candidate-application-guidance">
+                        Your application has reached the interview
+                        stage. Watch your email for communication
+                        from the employer.
+                    </p>
+
+                <?php elseif ($status === 'Reviewing') : ?>
+
+                    <p class="candidate-application-guidance">
+                        The employer is currently reviewing your
+                        application.
+                    </p>
+
+                <?php else : ?>
+
+                    <p class="candidate-application-guidance">
+                        Your application was submitted successfully
+                        and is waiting for employer review.
+                    </p>
+
+                <?php endif; ?>
+
+            </div>
+
+            <section class="application-history-card candidate-application-history">
+
+                <div class="application-history-header">
+                    <span class="application-label">Activity</span>
+                    <h2>Application Timeline</h2>
+                </div>
+
+                <div class="application-history-list">
+
+                    <?php foreach (
+                        array_reverse($application_history)
+                        as $history_item
+                    ) :
+
+                        $history_status = isset(
+                            $history_item['status']
+                        )
+                            ? sanitize_text_field(
+                                $history_item['status']
+                            )
+                            : 'New';
+
+                        $history_timestamp = isset(
+                            $history_item['timestamp']
+                        )
+                            ? absint(
+                                $history_item['timestamp']
+                            )
+                            : 0;
+                        ?>
+
+                        <div class="application-history-item">
+
+                            <span class="application-history-dot"></span>
+
+                            <div>
+                                <strong>
+                                    <?php echo esc_html(
+                                        $history_status
+                                    ); ?>
+                                </strong>
+
+                                <?php if ($history_timestamp) : ?>
+                                    <span>
+                                        <?php echo esc_html(
+                                            wp_date(
+                                                get_option(
+                                                    'date_format'
+                                                ) . ' ' .
+                                                get_option(
+                                                    'time_format'
+                                                ),
+                                                $history_timestamp
+                                            )
+                                        ); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
+                        </div>
+
+                    <?php endforeach; ?>
+
+                </div>
+
+            </section>
+
+            <div class="candidate-application-detail-actions">
+
+                <a
+                    class="secondary-button"
+                    href="<?php echo esc_url(
+                        home_url('/candidate-dashboard/')
+                    ); ?>"
+                >
+                    Back to Applications
+                </a>
+
+                <?php if (
+                    $job &&
+                    get_post_status($job_id) === 'publish'
+                ) : ?>
+
+                    <a
+                        class="primary-button"
+                        href="<?php echo esc_url(
+                            get_permalink($job_id)
+                        ); ?>"
+                    >
+                        View Job
+                    </a>
+
+                <?php endif; ?>
+
+                <?php if (
+                    $company_id &&
+                    get_post_status($company_id) === 'publish'
+                ) : ?>
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url(
+                            get_permalink($company_id)
+                        ); ?>"
+                    >
+                        View Company
+                    </a>
+
+                <?php endif; ?>
+
+            </div>
+
+        </section>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+add_shortcode(
+    'devhire_candidate_application_detail',
+    'devhire_candidate_application_detail_shortcode'
+);
+
