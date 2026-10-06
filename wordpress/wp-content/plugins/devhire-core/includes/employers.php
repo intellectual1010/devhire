@@ -1,0 +1,2857 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+
+/**
+ * ============================================================
+ * Employer Role
+ * ============================================================
+ */
+
+function devhire_register_employer_role() {
+
+    if (!get_role('employer')) {
+
+        add_role(
+            'employer',
+            'Employer',
+            [
+                'read' => true,
+            ]
+        );
+    }
+}
+
+add_action(
+    'init',
+    'devhire_register_employer_role'
+);
+
+/**
+ * ============================================================
+ * Employer Registration
+ * ============================================================
+ */
+
+function devhire_handle_employer_registration() {
+
+    if (
+        !isset($_POST['devhire_employer_register_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_employer_register_nonce'])
+            ),
+            'devhire_employer_register'
+        )
+    ) {
+        wp_die('Invalid registration request.');
+    }
+
+    $name = isset($_POST['name'])
+        ? sanitize_text_field(wp_unslash($_POST['name']))
+        : '';
+
+    $email = isset($_POST['email'])
+        ? sanitize_email(wp_unslash($_POST['email']))
+        : '';
+
+    $password = isset($_POST['password'])
+        ? (string) wp_unslash($_POST['password'])
+        : '';
+
+    if (!$name || !$email || !$password) {
+        wp_safe_redirect(
+            add_query_arg(
+                'registration_error',
+                'missing_fields',
+                home_url('/employer-register/')
+            )
+        );
+        exit;
+    }
+
+    if (!is_email($email)) {
+        wp_safe_redirect(
+            add_query_arg(
+                'registration_error',
+                'invalid_email',
+                home_url('/employer-register/')
+            )
+        );
+        exit;
+    }
+
+    if (email_exists($email)) {
+        wp_safe_redirect(
+            add_query_arg(
+                'registration_error',
+                'email_exists',
+                home_url('/employer-register/')
+            )
+        );
+        exit;
+    }
+
+    if (strlen($password) < 8) {
+        wp_safe_redirect(
+            add_query_arg(
+                'registration_error',
+                'weak_password',
+                home_url('/employer-register/')
+            )
+        );
+        exit;
+    }
+
+    $email_parts = explode('@', $email);
+
+    $base_username = sanitize_user(
+        $email_parts[0],
+        true
+    );
+
+    if (!$base_username) {
+        $base_username = 'employer';
+    }
+
+    $username = $base_username;
+    $counter  = 1;
+
+    while (username_exists($username)) {
+        $username = $base_username . $counter;
+        $counter++;
+    }
+
+    $user_id = wp_insert_user([
+        'user_login'   => $username,
+        'user_pass'    => $password,
+        'user_email'   => $email,
+        'display_name' => $name,
+        'first_name'   => $name,
+        'role'         => 'employer',
+    ]);
+
+    if (is_wp_error($user_id)) {
+        wp_safe_redirect(
+            add_query_arg(
+                'registration_error',
+                'registration_failed',
+                home_url('/employer-register/')
+            )
+        );
+        exit;
+    }
+
+    wp_set_current_user($user_id);
+    wp_set_auth_cookie($user_id, true);
+
+    wp_safe_redirect(
+        home_url('/employer-dashboard/')
+    );
+
+    exit;
+}
+
+
+add_action(
+    'admin_post_nopriv_devhire_employer_register',
+    'devhire_handle_employer_registration'
+);
+
+/**
+ * ============================================================
+ * Employer Registration Shortcode
+ * ============================================================
+ */
+
+function devhire_employer_register_shortcode() {
+
+    if (is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice success">
+                You are already logged in.
+                <a href="%s">View Employer Dashboard</a>
+            </div>',
+            esc_url(home_url('/employer-dashboard/'))
+        );
+    }
+
+    $error = isset($_GET['registration_error'])
+        ? sanitize_key(
+            wp_unslash($_GET['registration_error'])
+        )
+        : '';
+
+    $message = '';
+
+    switch ($error) {
+
+        case 'missing_fields':
+            $message = 'Please complete all fields.';
+            break;
+
+        case 'invalid_email':
+            $message = 'Please enter a valid email address.';
+            break;
+
+        case 'email_exists':
+            $message = 'An account already exists with this email.';
+            break;
+
+        case 'weak_password':
+            $message = 'Password must contain at least 8 characters.';
+            break;
+
+        case 'registration_failed':
+            $message = 'Registration failed. Please try again.';
+            break;
+    }
+
+    ob_start();
+    ?>
+
+    <div class="candidate-auth employer-auth">
+
+        <span class="hero-badge">
+            Employer Portal
+        </span>
+
+        <h1>Create Employer Account</h1>
+
+        <p>
+            Create an account to post jobs and manage applicants.
+        </p>
+
+        <?php if ($message) : ?>
+
+            <div class="devhire-notice error">
+                <?php echo esc_html($message); ?>
+            </div>
+
+        <?php endif; ?>
+
+        <form
+            method="post"
+            action="<?php echo esc_url(
+                admin_url('admin-post.php')
+            ); ?>"
+        >
+
+            <input
+                type="hidden"
+                name="action"
+                value="devhire_employer_register"
+            >
+
+            <?php
+            wp_nonce_field(
+                'devhire_employer_register',
+                'devhire_employer_register_nonce'
+            );
+            ?>
+
+            <div class="form-field">
+
+                <label for="employer-name">
+                    Full Name
+                </label>
+
+                <input
+                    id="employer-name"
+                    name="name"
+                    type="text"
+                    autocomplete="name"
+                    required
+                >
+
+            </div>
+
+            <div class="form-field">
+
+                <label for="employer-email">
+                    Email
+                </label>
+
+                <input
+                    id="employer-email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    required
+                >
+
+            </div>
+
+            <div class="form-field">
+
+                <label for="employer-password">
+                    Password
+                </label>
+
+                <input
+                    id="employer-password"
+                    name="password"
+                    type="password"
+                    minlength="8"
+                    autocomplete="new-password"
+                    required
+                >
+
+            </div>
+
+            <button
+                type="submit"
+                class="primary-button"
+            >
+                Create Employer Account
+            </button>
+
+        </form>
+
+        <p class="auth-switch">
+            Already have an employer account?
+
+            <a href="<?php echo esc_url(
+                home_url('/employer-login/')
+            ); ?>">
+                Sign in
+            </a>
+        </p>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_register',
+    'devhire_employer_register_shortcode'
+);
+
+/**
+ * ============================================================
+ * Employer Login
+ * ============================================================
+ */
+
+function devhire_employer_login_shortcode() {
+
+    if (is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice success">
+                You are logged in.
+                <a href="%s">View Employer Dashboard</a>
+            </div>',
+            esc_url(home_url('/employer-dashboard/'))
+        );
+    }
+
+    $error = '';
+
+    if (
+        isset($_POST['devhire_employer_login_nonce']) &&
+        wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_employer_login_nonce'])
+            ),
+            'devhire_employer_login'
+        )
+    ) {
+
+        $email = isset($_POST['email'])
+            ? sanitize_email(wp_unslash($_POST['email']))
+            : '';
+
+        $password = isset($_POST['password'])
+            ? (string) wp_unslash($_POST['password'])
+            : '';
+
+        $user = get_user_by('email', $email);
+
+        /*
+         * Only employer accounts may use this login.
+         */
+        if (
+            $user &&
+            in_array('employer', (array) $user->roles, true)
+        ) {
+
+            $credentials = [
+                'user_login'    => $user->user_login,
+                'user_password' => $password,
+                'remember'      => true,
+            ];
+
+            $login = wp_signon(
+                $credentials,
+                is_ssl()
+            );
+
+            if (!is_wp_error($login)) {
+
+                wp_safe_redirect(
+                    home_url('/employer-dashboard/')
+                );
+
+                exit;
+            }
+        }
+
+        $error =
+            '<div class="devhire-notice error">
+                Invalid employer email or password.
+            </div>';
+    }
+
+    ob_start();
+
+    echo wp_kses_post($error);
+    ?>
+
+    <div class="candidate-auth employer-auth">
+
+        <span class="hero-badge">
+            Employer Portal
+        </span>
+
+        <h1>Employer Login</h1>
+
+        <p>
+            Sign in to manage your jobs and applicants.
+        </p>
+
+        <form method="post">
+
+            <?php
+            wp_nonce_field(
+                'devhire_employer_login',
+                'devhire_employer_login_nonce'
+            );
+            ?>
+
+            <div class="form-field">
+
+                <label for="employer-login-email">
+                    Email
+                </label>
+
+                <input
+                    id="employer-login-email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    required
+                >
+
+            </div>
+
+            <div class="form-field">
+
+                <label for="employer-login-password">
+                    Password
+                </label>
+
+                <input
+                    id="employer-login-password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                >
+
+            </div>
+
+            <button
+                type="submit"
+                class="primary-button"
+            >
+                Sign In
+            </button>
+
+        </form>
+
+        <p class="auth-switch">
+
+            Don't have an employer account?
+
+            <a href="<?php echo esc_url(
+                home_url('/employer-register/')
+            ); ?>">
+                Create account
+            </a>
+
+        </p>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_login',
+    'devhire_employer_login_shortcode'
+);
+
+/**
+ * ============================================================
+ * Employer Dashboard
+ * ============================================================
+ */
+
+function devhire_employer_dashboard_shortcode() {
+
+    if (!is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice error">
+                Please <a href="%s">sign in as an employer</a>
+                to access the dashboard.
+            </div>',
+            esc_url(home_url('/employer-login/'))
+        );
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        return '<div class="devhire-notice error">
+            This dashboard is available only to employer accounts.
+        </div>';
+    }
+
+    /*
+     * Jobs belonging to this employer.
+     *
+     * We use post_author so WordPress itself owns the
+     * employer -> job relationship.
+     */
+    $jobs = new WP_Query([
+        'post_type'      => 'job',
+        'post_status'    => ['publish', 'draft', 'pending'],
+        'author'         => $user->ID,
+        'posts_per_page' => -1,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+    ]);
+
+    $total_jobs     = $jobs->found_posts;
+    $published_jobs = 0;
+    $draft_jobs     = 0;
+    $job_ids        = [];
+
+    foreach ($jobs->posts as $job) {
+
+        $job_ids[] = $job->ID;
+
+        if ($job->post_status === 'publish') {
+            $published_jobs++;
+        }
+
+        if ($job->post_status === 'draft') {
+            $draft_jobs++;
+        }
+    }
+
+    /*
+     * Count applications belonging to the employer's jobs.
+     */
+    $total_applications = 0;
+
+    if ($job_ids) {
+
+        $application_query = new WP_Query([
+            'post_type'      => 'job_application',
+            'post_status'    => 'private',
+            'posts_per_page' => 1,
+
+            'meta_query' => [
+                [
+                    'key'     => '_devhire_application_job',
+                    'value'   => $job_ids,
+                    'compare' => 'IN',
+                    'type'    => 'NUMERIC',
+                ],
+            ],
+        ]);
+
+        $total_applications = $application_query->found_posts;
+    }
+
+    ob_start();
+    ?>
+
+    <div class="candidate-dashboard employer-dashboard">
+
+        <div class="candidate-dashboard-header">
+
+            <div>
+
+                <span class="hero-badge">
+                    Employer Portal
+                </span>
+
+                <h1>
+                    Employer Dashboard
+                </h1>
+
+                <p>
+                    Welcome,
+                    <?php echo esc_html($user->display_name); ?>.
+                    Manage your jobs and applicants here.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <nav class="candidate-dashboard-nav">
+
+            <a
+                class="candidate-nav-link active"
+                href="<?php echo esc_url(
+                    home_url('/employer-dashboard/')
+                ); ?>"
+            >
+                My Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-post-job/')
+                ); ?>"
+            >
+                Post Job
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-applicants/')
+                ); ?>"
+            >
+                Applicants
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    wp_logout_url(
+                        home_url('/employer-login/')
+                    )
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
+
+
+        <div class="dashboard-stats">
+
+            <div class="dashboard-stat">
+                <span>Total Jobs</span>
+                <strong>
+                    <?php echo esc_html($total_jobs); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Published</span>
+                <strong>
+                    <?php echo esc_html($published_jobs); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Drafts</span>
+                <strong>
+                    <?php echo esc_html($draft_jobs); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Applications</span>
+                <strong>
+                    <?php echo esc_html($total_applications); ?>
+                </strong>
+            </div>
+
+        </div>
+
+
+        <div class="employer-jobs">
+
+            <div class="dashboard-section-header">
+
+                <div>
+                    <h2>My Jobs</h2>
+                    <p>
+                        Jobs posted from your employer account.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <?php if ($jobs->have_posts()) : ?>
+
+                <div class="application-list">
+
+                    <?php
+                    while ($jobs->have_posts()) :
+                        $jobs->the_post();
+
+                        $job_id = get_the_ID();
+
+                        $status = get_post_status($job_id);
+
+                        $application_count = new WP_Query([
+                            'post_type'      => 'job_application',
+                            'post_status'    => 'private',
+                            'posts_per_page' => 1,
+
+                            'meta_query' => [
+                                [
+                                    'key'     => '_devhire_application_job',
+                                    'value'   => $job_id,
+                                    'compare' => '=',
+                                    'type'    => 'NUMERIC',
+                                ],
+                            ],
+                        ]);
+                        ?>
+
+                        <article class="application-card">
+
+                            <div>
+
+                                <span class="application-job-label">
+                                    <?php
+                                    echo esc_html(
+                                        ucfirst($status)
+                                    );
+                                    ?>
+                                </span>
+
+                                <h3>
+                                    <?php the_title(); ?>
+                                </h3>
+
+                                <p>
+                                    <?php
+                                    echo esc_html(
+                                        $application_count->found_posts
+                                    );
+                                    ?>
+                                    application(s)
+                                </p>
+
+                            </div>
+
+
+                            <div class="application-card-actions">
+                                <a
+                                    class="secondary-button"
+                                    href="<?php
+                                    echo esc_url(
+                                        add_query_arg(
+                                            'job_id',
+                                            $job_id,
+                                            home_url('/employer-edit-job/')
+                                        )
+                                    );
+                                    ?>"
+                                >
+                                    Edit Job
+                                </a>
+
+                                <?php if ($status === 'publish') : ?>
+
+                                    <a
+                                        class="secondary-button"
+                                        href="<?php the_permalink(); ?>"
+                                    >
+                                        View Job
+                                    </a>
+
+                                <?php endif; ?>
+
+
+                                <form
+                                    method="post"
+                                    action="<?php echo esc_url(
+                                        admin_url('admin-post.php')
+                                    ); ?>"
+                                    class="job-status-form"
+                                >
+
+                                    <input
+                                        type="hidden"
+                                        name="action"
+                                        value="devhire_employer_job_status"
+                                    >
+
+                                    <input
+                                        type="hidden"
+                                        name="job_id"
+                                        value="<?php echo esc_attr($job_id); ?>"
+                                    >
+
+                                    <input
+                                        type="hidden"
+                                        name="job_status"
+                                        value="<?php
+                                        echo esc_attr(
+                                            $status === 'publish'
+                                                ? 'draft'
+                                                : 'publish'
+                                        );
+                                        ?>"
+                                    >
+
+                                    <?php
+                                    wp_nonce_field(
+                                        'devhire_job_status_' . $job_id,
+                                        'devhire_job_status_nonce'
+                                    );
+                                    ?>
+
+                                    <button
+                                        type="submit"
+                                        class="<?php
+                                        echo $status === 'publish'
+                                            ? 'secondary-button'
+                                            : 'primary-button';
+                                        ?>"
+                                    >
+                                        <?php
+                                        echo $status === 'publish'
+                                            ? 'Unpublish'
+                                            : 'Publish';
+                                        ?>
+                                    </button>
+
+                                </form>
+
+                            </div>
+
+                        </article>
+
+                    <?php endwhile; ?>
+
+                </div>
+
+            <?php else : ?>
+
+                <div class="dashboard-empty-state">
+
+                    <h3>No jobs posted yet</h3>
+
+                    <p>
+                        Create your first job listing to start
+                        receiving applications.
+                    </p>
+
+                    <a
+                        class="primary-button"
+                        href="<?php echo esc_url(
+                            home_url('/employer-post-job/')
+                        ); ?>"
+                    >
+                        Post Your First Job
+                    </a>
+
+                </div>
+
+            <?php endif; ?>
+
+            <?php wp_reset_postdata(); ?>
+
+        </div>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_dashboard',
+    'devhire_employer_dashboard_shortcode'
+);
+
+/**
+ * ============================================================
+ * Employer - Create Job
+ * ============================================================
+ */
+
+function devhire_handle_employer_create_job() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die('You are not allowed to create jobs.');
+    }
+
+    if (
+        !isset($_POST['devhire_create_job_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_create_job_nonce'])
+            ),
+            'devhire_create_job'
+        )
+    ) {
+        wp_die('Invalid job submission.');
+    }
+
+    $title = isset($_POST['job_title'])
+        ? sanitize_text_field(wp_unslash($_POST['job_title']))
+        : '';
+
+    $description = isset($_POST['job_description'])
+        ? wp_kses_post(wp_unslash($_POST['job_description']))
+        : '';
+
+    $salary = isset($_POST['salary'])
+        ? sanitize_text_field(wp_unslash($_POST['salary']))
+        : '';
+
+    $experience = isset($_POST['experience'])
+        ? sanitize_text_field(wp_unslash($_POST['experience']))
+        : '';
+
+    $deadline = isset($_POST['deadline'])
+        ? sanitize_text_field(wp_unslash($_POST['deadline']))
+        : '';
+
+    $remote = isset($_POST['remote'])
+        ? '1'
+        : '0';
+
+    if (!$title || !$description) {
+
+        wp_safe_redirect(
+            add_query_arg(
+                'job_error',
+                'missing_fields',
+                home_url('/employer-post-job/')
+            )
+        );
+
+        exit;
+    }
+
+    /*
+     * Create the job as a draft first.
+     */
+    $job_id = wp_insert_post([
+        'post_type'    => 'job',
+        'post_status'  => 'draft',
+        'post_title'   => $title,
+        'post_content' => $description,
+        'post_author'  => $user->ID,
+    ]);
+
+    if (is_wp_error($job_id)) {
+
+        wp_safe_redirect(
+            add_query_arg(
+                'job_error',
+                'create_failed',
+                home_url('/employer-post-job/')
+            )
+        );
+
+        exit;
+    }
+
+    /*
+     * Save DevHire job fields.
+     */
+    update_post_meta(
+        $job_id,
+        '_devhire_salary',
+        $salary
+    );
+
+    update_post_meta(
+        $job_id,
+        '_devhire_experience',
+        $experience
+    );
+
+    update_post_meta(
+        $job_id,
+        '_devhire_deadline',
+        $deadline
+    );
+
+    update_post_meta(
+        $job_id,
+        '_devhire_remote',
+        $remote
+    );
+
+    /*
+     * Taxonomies
+     */
+    $skill_ids = isset($_POST['skills'])
+        ? array_map(
+            'absint',
+            (array) wp_unslash($_POST['skills'])
+        )
+        : [];
+
+    $job_type = isset($_POST['job_type'])
+        ? absint($_POST['job_type'])
+        : 0;
+
+    $location = isset($_POST['location'])
+        ? absint($_POST['location'])
+        : 0;
+
+    if ($skill_ids) {
+        wp_set_object_terms(
+            $job_id,
+            $skill_ids,
+            'job_skill'
+        );
+    }
+
+    if ($job_type) {
+        wp_set_object_terms(
+            $job_id,
+            [$job_type],
+            'job_type'
+        );
+    }
+
+    if ($location) {
+        wp_set_object_terms(
+            $job_id,
+            [$location],
+            'job_location'
+        );
+    }
+
+    wp_safe_redirect(
+        add_query_arg(
+            'job_created',
+            '1',
+            home_url('/employer-dashboard/')
+        )
+    );
+
+    exit;
+}
+
+
+add_action(
+    'admin_post_devhire_employer_create_job',
+    'devhire_handle_employer_create_job'
+);
+
+/**
+ * ============================================================
+ * Employer - Post Job Form
+ * ============================================================
+ */
+
+function devhire_employer_post_job_shortcode() {
+
+    if (!is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice error">
+                Please <a href="%s">sign in as an employer</a>
+                to post a job.
+            </div>',
+            esc_url(home_url('/employer-login/'))
+        );
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        return '<div class="devhire-notice error">
+            Only employer accounts can post jobs.
+        </div>';
+    }
+
+    $skills = get_terms([
+        'taxonomy'   => 'job_skill',
+        'hide_empty' => false,
+    ]);
+
+    $job_types = get_terms([
+        'taxonomy'   => 'job_type',
+        'hide_empty' => false,
+    ]);
+
+    $locations = get_terms([
+        'taxonomy'   => 'job_location',
+        'hide_empty' => false,
+    ]);
+
+    $error = isset($_GET['job_error'])
+        ? sanitize_key(wp_unslash($_GET['job_error']))
+        : '';
+
+    ob_start();
+    ?>
+
+    <div class="candidate-dashboard employer-dashboard">
+
+        <div class="candidate-dashboard-header">
+            <div>
+                <span class="hero-badge">
+                    Employer Portal
+                </span>
+
+                <h1>Post a Job</h1>
+
+                <p>
+                    Create a new job listing for candidates.
+                </p>
+            </div>
+        </div>
+
+
+        <nav class="candidate-dashboard-nav">
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-dashboard/')
+                ); ?>"
+            >
+                My Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link active"
+                href="<?php echo esc_url(
+                    home_url('/employer-post-job/')
+                ); ?>"
+            >
+                Post Job
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-applicants/')
+                ); ?>"
+            >
+                Applicants
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    wp_logout_url(
+                        home_url('/employer-login/')
+                    )
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
+
+
+        <?php if ($error === 'missing_fields') : ?>
+
+            <div class="devhire-notice error">
+                Job title and description are required.
+            </div>
+
+        <?php elseif ($error === 'create_failed') : ?>
+
+            <div class="devhire-notice error">
+                Unable to create the job. Please try again.
+            </div>
+
+        <?php endif; ?>
+
+
+        <form
+            class="candidate-profile-form employer-job-form"
+            method="post"
+            action="<?php echo esc_url(
+                admin_url('admin-post.php')
+            ); ?>"
+        >
+
+            <input
+                type="hidden"
+                name="action"
+                value="devhire_employer_create_job"
+            >
+
+            <?php
+            wp_nonce_field(
+                'devhire_create_job',
+                'devhire_create_job_nonce'
+            );
+            ?>
+
+
+            <div class="form-field">
+
+                <label for="job-title">
+                    Job Title
+                </label>
+
+                <input
+                    id="job-title"
+                    name="job_title"
+                    type="text"
+                    placeholder="Senior Full Stack Developer"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="job-description">
+                    Job Description
+                </label>
+
+                <textarea
+                    id="job-description"
+                    name="job_description"
+                    rows="10"
+                    placeholder="Describe the role, responsibilities and requirements..."
+                    required
+                ></textarea>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="salary">
+                    Salary
+                </label>
+
+                <input
+                    id="salary"
+                    name="salary"
+                    type="text"
+                    placeholder="$80,000 - $110,000"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="experience">
+                    Experience
+                </label>
+
+                <input
+                    id="experience"
+                    name="experience"
+                    type="text"
+                    placeholder="3+ years"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="job-type">
+                    Job Type
+                </label>
+
+                <select
+                    id="job-type"
+                    name="job_type"
+                >
+
+                    <option value="">
+                        Select Job Type
+                    </option>
+
+                    <?php if (!is_wp_error($job_types)) : ?>
+
+                        <?php foreach ($job_types as $type) : ?>
+
+                            <option
+                                value="<?php echo esc_attr($type->term_id); ?>"
+                            >
+                                <?php echo esc_html($type->name); ?>
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="job-location">
+                    Location
+                </label>
+
+                <select
+                    id="job-location"
+                    name="location"
+                >
+
+                    <option value="">
+                        Select Location
+                    </option>
+
+                    <?php if (!is_wp_error($locations)) : ?>
+
+                        <?php foreach ($locations as $location) : ?>
+
+                            <option
+                                value="<?php echo esc_attr($location->term_id); ?>"
+                            >
+                                <?php echo esc_html($location->name); ?>
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label>Skills</label>
+
+                <div class="employer-skills-grid">
+
+                    <?php if (!is_wp_error($skills)) : ?>
+
+                        <?php foreach ($skills as $skill) : ?>
+
+                            <label class="employer-skill-option">
+
+                                <input
+                                    type="checkbox"
+                                    name="skills[]"
+                                    value="<?php
+                                    echo esc_attr($skill->term_id);
+                                    ?>"
+                                >
+
+                                <span>
+                                    <?php echo esc_html($skill->name); ?>
+                                </span>
+
+                            </label>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label class="employer-skill-option">
+
+                    <input
+                        type="checkbox"
+                        name="remote"
+                        value="1"
+                    >
+
+                    <span>Remote position</span>
+
+                </label>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="deadline">
+                    Application Deadline
+                </label>
+
+                <input
+                    id="deadline"
+                    name="deadline"
+                    type="date"
+                >
+
+            </div>
+
+
+            <div class="form-actions">
+
+                <button
+                    type="submit"
+                    class="primary-button"
+                >
+                    Create Job
+                </button>
+
+                <a
+                    class="secondary-button"
+                    href="<?php echo esc_url(
+                        home_url('/employer-dashboard/')
+                    ); ?>"
+                >
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_post_job',
+    'devhire_employer_post_job_shortcode'
+);
+
+/**
+ * ============================================================
+ * Employer - Change Job Status
+ * ============================================================
+ */
+
+function devhire_handle_employer_job_status() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die('You are not allowed to manage jobs.');
+    }
+
+    $job_id = isset($_POST['job_id'])
+        ? absint($_POST['job_id'])
+        : 0;
+
+    $new_status = isset($_POST['job_status'])
+        ? sanitize_key(wp_unslash($_POST['job_status']))
+        : '';
+
+    if (
+        !$job_id ||
+        !isset($_POST['devhire_job_status_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_job_status_nonce'])
+            ),
+            'devhire_job_status_' . $job_id
+        )
+    ) {
+        wp_die('Invalid request.');
+    }
+
+    $job = get_post($job_id);
+
+    /*
+     * Security:
+     * employer can only modify their own jobs.
+     */
+    if (
+        !$job ||
+        $job->post_type !== 'job' ||
+        (int) $job->post_author !== (int) $user->ID
+    ) {
+        wp_die('You are not allowed to manage this job.');
+    }
+
+    if (!in_array($new_status, ['draft', 'publish'], true)) {
+        wp_die('Invalid job status.');
+    }
+
+    $result = wp_update_post([
+        'ID'          => $job_id,
+        'post_status' => $new_status,
+    ], true);
+
+    if (is_wp_error($result)) {
+        wp_die('Unable to update the job.');
+    }
+
+    wp_safe_redirect(
+        add_query_arg(
+            'job_status_updated',
+            '1',
+            home_url('/employer-dashboard/')
+        )
+    );
+
+    exit;
+}
+
+add_action(
+    'admin_post_devhire_employer_job_status',
+    'devhire_handle_employer_job_status'
+);
+
+/**
+ * ============================================================
+ * Employer - Update Job
+ * ============================================================
+ */
+
+function devhire_handle_employer_update_job() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die('You are not allowed to edit jobs.');
+    }
+
+    $job_id = isset($_POST['job_id'])
+        ? absint($_POST['job_id'])
+        : 0;
+
+    if (
+        !$job_id ||
+        !isset($_POST['devhire_update_job_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_update_job_nonce'])
+            ),
+            'devhire_update_job_' . $job_id
+        )
+    ) {
+        wp_die('Invalid request.');
+    }
+
+    $job = get_post($job_id);
+
+    /*
+     * Employer may edit only their own job.
+     */
+    if (
+        !$job ||
+        $job->post_type !== 'job' ||
+        (int) $job->post_author !== (int) $user->ID
+    ) {
+        wp_die('You are not allowed to edit this job.');
+    }
+
+    $title = isset($_POST['job_title'])
+        ? sanitize_text_field(wp_unslash($_POST['job_title']))
+        : '';
+
+    $description = isset($_POST['job_description'])
+        ? wp_kses_post(wp_unslash($_POST['job_description']))
+        : '';
+
+    $salary = isset($_POST['salary'])
+        ? sanitize_text_field(wp_unslash($_POST['salary']))
+        : '';
+
+    $experience = isset($_POST['experience'])
+        ? sanitize_text_field(wp_unslash($_POST['experience']))
+        : '';
+
+    $deadline = isset($_POST['deadline'])
+        ? sanitize_text_field(wp_unslash($_POST['deadline']))
+        : '';
+
+    $remote = isset($_POST['remote'])
+        ? '1'
+        : '0';
+
+    if (!$title || !$description) {
+
+        wp_safe_redirect(
+            add_query_arg(
+                [
+                    'job_id'    => $job_id,
+                    'job_error' => 'missing_fields',
+                ],
+                home_url('/employer-edit-job/')
+            )
+        );
+
+        exit;
+    }
+
+    $result = wp_update_post([
+        'ID'           => $job_id,
+        'post_title'   => $title,
+        'post_content' => $description,
+    ], true);
+
+    if (is_wp_error($result)) {
+
+        wp_safe_redirect(
+            add_query_arg(
+                [
+                    'job_id'    => $job_id,
+                    'job_error' => 'update_failed',
+                ],
+                home_url('/employer-edit-job/')
+            )
+        );
+
+        exit;
+    }
+
+    update_post_meta(
+        $job_id,
+        '_devhire_salary',
+        $salary
+    );
+
+    update_post_meta(
+        $job_id,
+        '_devhire_experience',
+        $experience
+    );
+
+    update_post_meta(
+        $job_id,
+        '_devhire_deadline',
+        $deadline
+    );
+
+    update_post_meta(
+        $job_id,
+        '_devhire_remote',
+        $remote
+    );
+
+    /*
+     * Update taxonomies.
+     */
+    $skill_ids = isset($_POST['skills'])
+        ? array_map(
+            'absint',
+            (array) wp_unslash($_POST['skills'])
+        )
+        : [];
+
+    $job_type = isset($_POST['job_type'])
+        ? absint($_POST['job_type'])
+        : 0;
+
+    $location = isset($_POST['location'])
+        ? absint($_POST['location'])
+        : 0;
+
+    wp_set_object_terms(
+        $job_id,
+        $skill_ids,
+        'job_skill'
+    );
+
+    wp_set_object_terms(
+        $job_id,
+        $job_type ? [$job_type] : [],
+        'job_type'
+    );
+
+    wp_set_object_terms(
+        $job_id,
+        $location ? [$location] : [],
+        'job_location'
+    );
+
+    wp_safe_redirect(
+        add_query_arg(
+            'job_updated',
+            '1',
+            home_url('/employer-dashboard/')
+        )
+    );
+
+    exit;
+}
+
+add_action(
+    'admin_post_devhire_employer_update_job',
+    'devhire_handle_employer_update_job'
+);
+
+/**
+ * ============================================================
+ * Employer - Edit Job Form
+ * ============================================================
+ */
+
+function devhire_employer_edit_job_shortcode() {
+
+    if (!is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice error">
+                Please <a href="%s">sign in as an employer</a>.
+            </div>',
+            esc_url(home_url('/employer-login/'))
+        );
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        return '<div class="devhire-notice error">
+            Only employer accounts can edit jobs.
+        </div>';
+    }
+
+    $job_id = isset($_GET['job_id'])
+        ? absint($_GET['job_id'])
+        : 0;
+
+    $job = $job_id
+        ? get_post($job_id)
+        : null;
+
+    /*
+     * Security: employer can edit only their own jobs.
+     */
+    if (
+        !$job ||
+        $job->post_type !== 'job' ||
+        (int) $job->post_author !== (int) $user->ID
+    ) {
+        return '<div class="devhire-notice error">
+            Job not found or you do not have permission to edit it.
+        </div>';
+    }
+
+    /*
+     * Existing custom fields.
+     */
+    $salary = get_post_meta(
+        $job_id,
+        '_devhire_salary',
+        true
+    );
+
+    $experience = get_post_meta(
+        $job_id,
+        '_devhire_experience',
+        true
+    );
+
+    $deadline = get_post_meta(
+        $job_id,
+        '_devhire_deadline',
+        true
+    );
+
+    $remote = get_post_meta(
+        $job_id,
+        '_devhire_remote',
+        true
+    );
+
+    /*
+     * Available taxonomy terms.
+     */
+    $skills = get_terms([
+        'taxonomy'   => 'job_skill',
+        'hide_empty' => false,
+    ]);
+
+    $job_types = get_terms([
+        'taxonomy'   => 'job_type',
+        'hide_empty' => false,
+    ]);
+
+    $locations = get_terms([
+        'taxonomy'   => 'job_location',
+        'hide_empty' => false,
+    ]);
+
+    /*
+     * Existing selections.
+     */
+    $selected_skills = wp_get_object_terms(
+        $job_id,
+        'job_skill',
+        [
+            'fields' => 'ids',
+        ]
+    );
+
+    if (is_wp_error($selected_skills)) {
+        $selected_skills = [];
+    }
+
+    $selected_job_types = wp_get_object_terms(
+        $job_id,
+        'job_type',
+        [
+            'fields' => 'ids',
+        ]
+    );
+
+    if (is_wp_error($selected_job_types)) {
+        $selected_job_types = [];
+    }
+
+    $selected_locations = wp_get_object_terms(
+        $job_id,
+        'job_location',
+        [
+            'fields' => 'ids',
+        ]
+    );
+
+    if (is_wp_error($selected_locations)) {
+        $selected_locations = [];
+    }
+
+    $selected_job_type = !empty($selected_job_types)
+        ? (int) $selected_job_types[0]
+        : 0;
+
+    $selected_location = !empty($selected_locations)
+        ? (int) $selected_locations[0]
+        : 0;
+
+    $error = isset($_GET['job_error'])
+        ? sanitize_key(wp_unslash($_GET['job_error']))
+        : '';
+
+    ob_start();
+    ?>
+
+    <div class="candidate-dashboard employer-dashboard">
+
+        <div class="candidate-dashboard-header">
+
+            <div>
+
+                <span class="hero-badge">
+                    Employer Portal
+                </span>
+
+                <h1>Edit Job</h1>
+
+                <p>
+                    Update your job listing.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <nav class="candidate-dashboard-nav">
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-dashboard/')
+                ); ?>"
+            >
+                My Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-post-job/')
+                ); ?>"
+            >
+                Post Job
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-applicants/')
+                ); ?>"
+            >
+                Applicants
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    wp_logout_url(
+                        home_url('/employer-login/')
+                    )
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
+
+
+        <?php if ($error === 'missing_fields') : ?>
+
+            <div class="devhire-notice error">
+                Job title and description are required.
+            </div>
+
+        <?php elseif ($error === 'update_failed') : ?>
+
+            <div class="devhire-notice error">
+                Unable to update the job.
+            </div>
+
+        <?php endif; ?>
+
+
+        <form
+            class="candidate-profile-form employer-job-form"
+            method="post"
+            action="<?php echo esc_url(
+                admin_url('admin-post.php')
+            ); ?>"
+        >
+
+            <input
+                type="hidden"
+                name="action"
+                value="devhire_employer_update_job"
+            >
+
+            <input
+                type="hidden"
+                name="job_id"
+                value="<?php echo esc_attr($job_id); ?>"
+            >
+
+            <?php
+            wp_nonce_field(
+                'devhire_update_job_' . $job_id,
+                'devhire_update_job_nonce'
+            );
+            ?>
+
+
+            <div class="form-field">
+
+                <label for="job-title">
+                    Job Title
+                </label>
+
+                <input
+                    id="job-title"
+                    name="job_title"
+                    type="text"
+                    value="<?php
+                    echo esc_attr($job->post_title);
+                    ?>"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="job-description">
+                    Job Description
+                </label>
+
+                <textarea
+                    id="job-description"
+                    name="job_description"
+                    rows="10"
+                    required
+                ><?php
+                    echo esc_textarea($job->post_content);
+                ?></textarea>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="salary">
+                    Salary
+                </label>
+
+                <input
+                    id="salary"
+                    name="salary"
+                    type="text"
+                    value="<?php echo esc_attr($salary); ?>"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="experience">
+                    Experience
+                </label>
+
+                <input
+                    id="experience"
+                    name="experience"
+                    type="text"
+                    value="<?php
+                    echo esc_attr($experience);
+                    ?>"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="job-type">
+                    Job Type
+                </label>
+
+                <select
+                    id="job-type"
+                    name="job_type"
+                >
+
+                    <option value="">
+                        Select Job Type
+                    </option>
+
+                    <?php if (!is_wp_error($job_types)) : ?>
+
+                        <?php foreach ($job_types as $type) : ?>
+
+                            <option
+                                value="<?php
+                                echo esc_attr($type->term_id);
+                                ?>"
+                                <?php
+                                selected(
+                                    $selected_job_type,
+                                    $type->term_id
+                                );
+                                ?>
+                            >
+                                <?php echo esc_html($type->name); ?>
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="job-location">
+                    Location
+                </label>
+
+                <select
+                    id="job-location"
+                    name="location"
+                >
+
+                    <option value="">
+                        Select Location
+                    </option>
+
+                    <?php if (!is_wp_error($locations)) : ?>
+
+                        <?php foreach ($locations as $location) : ?>
+
+                            <option
+                                value="<?php
+                                echo esc_attr($location->term_id);
+                                ?>"
+                                <?php
+                                selected(
+                                    $selected_location,
+                                    $location->term_id
+                                );
+                                ?>
+                            >
+                                <?php echo esc_html($location->name); ?>
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label>Skills</label>
+
+                <div class="employer-skills-grid">
+
+                    <?php if (!is_wp_error($skills)) : ?>
+
+                        <?php foreach ($skills as $skill) : ?>
+
+                            <label class="employer-skill-option">
+
+                                <input
+                                    type="checkbox"
+                                    name="skills[]"
+                                    value="<?php
+                                    echo esc_attr(
+                                        $skill->term_id
+                                    );
+                                    ?>"
+                                    <?php
+                                    checked(
+                                        in_array(
+                                            $skill->term_id,
+                                            $selected_skills,
+                                            true
+                                        )
+                                    );
+                                    ?>
+                                >
+
+                                <span>
+                                    <?php
+                                    echo esc_html($skill->name);
+                                    ?>
+                                </span>
+
+                            </label>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label class="employer-skill-option">
+
+                    <input
+                        type="checkbox"
+                        name="remote"
+                        value="1"
+                        <?php checked($remote, '1'); ?>
+                    >
+
+                    <span>Remote position</span>
+
+                </label>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="deadline">
+                    Application Deadline
+                </label>
+
+                <input
+                    id="deadline"
+                    name="deadline"
+                    type="date"
+                    value="<?php echo esc_attr($deadline); ?>"
+                >
+
+            </div>
+
+
+            <div class="form-actions">
+
+                <button
+                    type="submit"
+                    class="primary-button"
+                >
+                    Save Changes
+                </button>
+
+                <a
+                    class="secondary-button"
+                    href="<?php echo esc_url(
+                        home_url('/employer-dashboard/')
+                    ); ?>"
+                >
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_edit_job',
+    'devhire_employer_edit_job_shortcode'
+);
+
+/**
+ * ============================================================
+ * Employer - Applicants
+ * ============================================================
+ */
+
+function devhire_employer_applicants_shortcode() {
+
+    if (!is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice error">
+                Please <a href="%s">sign in as an employer</a>.
+            </div>',
+            esc_url(home_url('/employer-login/'))
+        );
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        return '<div class="devhire-notice error">
+            Only employer accounts can view applicants.
+        </div>';
+    }
+
+    /*
+     * Get IDs of jobs owned by this employer.
+     */
+    $job_ids = get_posts([
+        'post_type'      => 'job',
+        'post_status'    => ['publish', 'draft', 'pending'],
+        'author'         => $user->ID,
+        'posts_per_page' => -1,
+        'fields'         => 'ids',
+    ]);
+
+    /*
+     * Get applications belonging only to those jobs.
+     */
+    $applications = null;
+
+    if ($job_ids) {
+
+        $applications = new WP_Query([
+            'post_type'      => 'job_application',
+            'post_status'    => 'private',
+            'posts_per_page' => -1,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+
+            'meta_query' => [
+                [
+                    'key'     => '_devhire_application_job',
+                    'value'   => $job_ids,
+                    'compare' => 'IN',
+                    'type'    => 'NUMERIC',
+                ],
+            ],
+        ]);
+    }
+
+    ob_start();
+    ?>
+
+    <div class="candidate-dashboard employer-dashboard">
+
+        <div class="candidate-dashboard-header">
+
+            <div>
+
+                <span class="hero-badge">
+                    Employer Portal
+                </span>
+
+                <h1>Applicants</h1>
+
+                <p>
+                    Review candidates who applied to your jobs.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <nav class="candidate-dashboard-nav">
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-dashboard/')
+                ); ?>"
+            >
+                My Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-post-job/')
+                ); ?>"
+            >
+                Post Job
+            </a>
+
+            <a
+                class="candidate-nav-link active"
+                href="<?php echo esc_url(
+                    home_url('/employer-applicants/')
+                ); ?>"
+            >
+                Applicants
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    wp_logout_url(
+                        home_url('/employer-login/')
+                    )
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
+
+
+        <?php
+        if (
+            $applications &&
+            $applications->have_posts()
+        ) :
+        ?>
+
+            <div class="application-list">
+
+                <?php
+                while ($applications->have_posts()) :
+                    $applications->the_post();
+
+                    $application_id = get_the_ID();
+
+                    $job_id = (int) get_post_meta(
+                        $application_id,
+                        '_devhire_application_job',
+                        true
+                    );
+
+                    $name = get_post_meta(
+                        $application_id,
+                        '_devhire_applicant_name',
+                        true
+                    );
+
+                    $email = get_post_meta(
+                        $application_id,
+                        '_devhire_applicant_email',
+                        true
+                    );
+
+                    $status = get_post_meta(
+                        $application_id,
+                        '_devhire_application_status',
+                        true
+                    );
+
+                    if (!$status) {
+                        $status = 'New';
+                    }
+
+                    $job_title = get_the_title($job_id);
+                    ?>
+
+                    <article class="application-card">
+
+                        <div>
+
+                            <span class="application-job-label">
+                                Applied for
+                                <?php echo esc_html($job_title); ?>
+                            </span>
+
+                            <h3>
+                                <?php echo esc_html($name); ?>
+                            </h3>
+
+                            <p>
+                                <?php echo esc_html($email); ?>
+                            </p>
+
+                        </div>
+
+
+                        <div class="application-card-actions">
+
+                            <span class="application-status">
+                                <?php echo esc_html($status); ?>
+                            </span>
+
+                            <a
+                                class="secondary-button"
+                                href="<?php
+                                echo esc_url(
+                                    add_query_arg(
+                                        'application_id',
+                                        $application_id,
+                                        home_url(
+                                            '/employer-view-application/'
+                                        )
+                                    )
+                                );
+                                ?>"
+                            >
+                                View Application
+                            </a>
+
+                        </div>
+
+                    </article>
+
+                <?php endwhile; ?>
+
+            </div>
+
+            <?php wp_reset_postdata(); ?>
+
+        <?php else : ?>
+
+            <div class="dashboard-empty-state">
+
+                <h3>No applicants yet</h3>
+
+                <p>
+                    Applications submitted to your jobs will
+                    appear here.
+                </p>
+
+            </div>
+
+        <?php endif; ?>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_applicants',
+    'devhire_employer_applicants_shortcode'
+);
+
+/**
+ * ============================================================
+ * Employer - View Application
+ * ============================================================
+ */
+
+function devhire_employer_view_application_shortcode() {
+
+    if (!is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice error">
+                Please <a href="%s">sign in as an employer</a>.
+            </div>',
+            esc_url(home_url('/employer-login/'))
+        );
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        return '<div class="devhire-notice error">
+            Only employer accounts can view applications.
+        </div>';
+    }
+
+    $application_id = isset($_GET['application_id'])
+        ? absint($_GET['application_id'])
+        : 0;
+
+    $application = $application_id
+        ? get_post($application_id)
+        : null;
+
+    if (
+        !$application ||
+        $application->post_type !== 'job_application'
+    ) {
+        return '<div class="devhire-notice error">
+            Application not found.
+        </div>';
+    }
+
+    /*
+     * Get the job associated with this application.
+     */
+    $job_id = (int) get_post_meta(
+        $application_id,
+        '_devhire_application_job',
+        true
+    );
+
+    $job = $job_id
+        ? get_post($job_id)
+        : null;
+
+    /*
+     * Critical ownership check.
+     *
+     * The employer can view the application only when
+     * they own the associated job.
+     */
+    if (
+        !$job ||
+        $job->post_type !== 'job' ||
+        (int) $job->post_author !== (int) $user->ID
+    ) {
+        return '<div class="devhire-notice error">
+            You do not have permission to view this application.
+        </div>';
+    }
+
+    /*
+     * Applicant information.
+     */
+    $name = get_post_meta(
+        $application_id,
+        '_devhire_applicant_name',
+        true
+    );
+
+    $email = get_post_meta(
+        $application_id,
+        '_devhire_applicant_email',
+        true
+    );
+
+    $phone = get_post_meta(
+        $application_id,
+        '_devhire_applicant_phone',
+        true
+    );
+
+    $linkedin = get_post_meta(
+        $application_id,
+        '_devhire_applicant_linkedin',
+        true
+    );
+
+    $message = get_post_meta(
+        $application_id,
+        '_devhire_applicant_message',
+        true
+    );
+
+    $resume = get_post_meta(
+        $application_id,
+        '_devhire_applicant_resume',
+        true
+    );
+
+    $status = get_post_meta(
+        $application_id,
+        '_devhire_application_status',
+        true
+    );
+
+    if (!$status) {
+        $status = 'New';
+    }
+
+    ob_start();
+    ?>
+
+    <div class="candidate-dashboard employer-dashboard">
+
+        <div class="candidate-dashboard-header">
+
+            <div>
+
+                <span class="hero-badge">
+                    Employer Portal
+                </span>
+
+                <h1>
+                    <?php echo esc_html($name ?: 'Application'); ?>
+                </h1>
+
+                <p>
+                    Application for
+                    <strong>
+                        <?php echo esc_html($job->post_title); ?>
+                    </strong>
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <nav class="candidate-dashboard-nav">
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-dashboard/')
+                ); ?>"
+            >
+                My Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-post-job/')
+                ); ?>"
+            >
+                Post Job
+            </a>
+
+            <a
+                class="candidate-nav-link active"
+                href="<?php echo esc_url(
+                    home_url('/employer-applicants/')
+                ); ?>"
+            >
+                Applicants
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    wp_logout_url(
+                        home_url('/employer-login/')
+                    )
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
+
+
+        <div class="application-detail-card">
+
+            <div class="application-detail-header">
+
+                <div>
+                    <span class="application-job-label">
+                        Candidate
+                    </span>
+
+                    <h2>
+                        <?php echo esc_html($name); ?>
+                    </h2>
+                </div>
+
+                <span class="application-status">
+                    <?php echo esc_html($status); ?>
+                </span>
+
+            </div>
+
+
+            <div class="application-detail-grid">
+
+                <div>
+                    <span>Email</span>
+
+                    <strong>
+                        <a href="mailto:<?php
+                        echo esc_attr($email);
+                        ?>">
+                            <?php echo esc_html($email); ?>
+                        </a>
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Phone</span>
+
+                    <strong>
+                        <?php
+                        echo esc_html(
+                            $phone ?: 'Not provided'
+                        );
+                        ?>
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Job</span>
+
+                    <strong>
+                        <?php echo esc_html($job->post_title); ?>
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Applied</span>
+
+                    <strong>
+                        <?php
+                        echo esc_html(
+                            get_the_date(
+                                'M j, Y',
+                                $application_id
+                            )
+                        );
+                        ?>
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <?php if ($linkedin) : ?>
+
+                <div class="application-detail-section">
+
+                    <h3>LinkedIn</h3>
+
+                    <a
+                        href="<?php echo esc_url($linkedin); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        View LinkedIn Profile
+                    </a>
+
+                </div>
+
+            <?php endif; ?>
+
+
+            <div class="application-detail-section">
+
+                <h3>Cover Message</h3>
+
+                <?php if ($message) : ?>
+
+                    <div class="application-message">
+                        <?php
+                        echo wp_kses_post(
+                            wpautop($message)
+                        );
+                        ?>
+                    </div>
+
+                <?php else : ?>
+
+                    <p>No cover message provided.</p>
+
+                <?php endif; ?>
+
+            </div>
+
+
+            <?php if ($resume) : ?>
+
+                <div class="application-detail-section">
+
+                    <h3>Resume</h3>
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url($resume); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        View Resume
+                    </a>
+
+                </div>
+
+            <?php endif; ?>
+
+
+            <div class="form-actions">
+
+                <a
+                    class="secondary-button"
+                    href="<?php echo esc_url(
+                        home_url('/employer-applicants/')
+                    ); ?>"
+                >
+                    Back to Applicants
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_view_application',
+    'devhire_employer_view_application_shortcode'
+);

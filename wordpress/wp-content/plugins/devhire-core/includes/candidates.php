@@ -719,6 +719,38 @@ function devhire_candidate_dashboard_shortcode() {
         'order'   => 'DESC',
     ]);
 
+    /*
+    * Candidate application statistics.
+    */
+    $total_applications = $applications->found_posts;
+
+    $reviewing_count = 0;
+    $interview_count = 0;
+    $hired_count = 0;
+
+    foreach ($applications->posts as $application) {
+
+        $application_status = get_post_meta(
+            $application->ID,
+            '_devhire_application_status',
+            true
+        );
+
+        switch ($application_status) {
+
+            case 'Reviewing':
+                $reviewing_count++;
+                break;
+
+            case 'Interview':
+                $interview_count++;
+                break;
+
+            case 'Hired':
+                $hired_count++;
+                break;
+        }
+    }
 
     ob_start();
     ?>
@@ -796,21 +828,39 @@ function devhire_candidate_dashboard_shortcode() {
 
         </nav>
 
-        <div class="dashboard-stat">
+        <div class="dashboard-stats">
 
-            <span>
-                Applications
-            </span>
+            <div class="dashboard-stat">
+                <span>Total Applications</span>
 
-            <strong>
+                <strong>
+                    <?php echo esc_html($total_applications); ?>
+                </strong>
+            </div>
 
-                <?php
-                echo esc_html(
-                    $applications->found_posts
-                );
-                ?>
+            <div class="dashboard-stat">
+                <span>Reviewing</span>
 
-            </strong>
+                <strong>
+                    <?php echo esc_html($reviewing_count); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Interviews</span>
+
+                <strong>
+                    <?php echo esc_html($interview_count); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Hired</span>
+
+                <strong>
+                    <?php echo esc_html($hired_count); ?>
+                </strong>
+            </div>
 
         </div>
 
@@ -863,6 +913,29 @@ function devhire_candidate_dashboard_shortcode() {
                                 )
                             )
                         );
+
+                    /*
+                    * Application progress.
+                    */
+                    $progress_steps = [
+                        'New',
+                        'Reviewing',
+                        'Interview',
+                        'Hired',
+                    ];
+
+                    $current_step = array_search(
+                        $status,
+                        $progress_steps,
+                        true
+                    );
+
+                    if ($current_step === false) {
+                        $current_step = -1;
+                    }
+
+                    $is_rejected = ($status === 'Rejected');
+
                     ?>
 
                     <article class="application-card">
@@ -936,6 +1009,44 @@ function devhire_candidate_dashboard_shortcode() {
                             ?>
 
                         </span>
+
+                        <div class="application-progress">
+
+                            <?php if ($is_rejected) : ?>
+
+                                <div class="application-progress-rejected">
+                                    Application Rejected
+                                </div>
+
+                            <?php else : ?>
+
+                                <?php foreach ($progress_steps as $index => $step) : ?>
+
+                                    <?php
+                                    $step_class = '';
+
+                                    if ($index < $current_step) {
+                                        $step_class = 'completed';
+                                    } elseif ($index === $current_step) {
+                                        $step_class = 'current';
+                                    }
+                                    ?>
+
+                                    <div class="progress-step <?php echo esc_attr($step_class); ?>">
+
+                                        <span class="progress-dot"></span>
+
+                                        <span class="progress-label">
+                                            <?php echo esc_html($step); ?>
+                                        </span>
+
+                                    </div>
+
+                                <?php endforeach; ?>
+
+                            <?php endif; ?>
+
+                        </div>
 
                     </article>
 

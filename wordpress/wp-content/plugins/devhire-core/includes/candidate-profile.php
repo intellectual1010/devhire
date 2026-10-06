@@ -340,17 +340,49 @@ function devhire_candidate_profile_shortcode() {
 
             </div>
 
+        </div>
+
+        <nav class="candidate-dashboard-nav">
+
             <a
-                class="secondary-button"
+                class="candidate-nav-link"
                 href="<?php echo esc_url(
                     home_url('/candidate-dashboard/')
                 ); ?>"
             >
-                Back to Dashboard
+                My Applications
             </a>
 
-        </div>
+            <a
+                class="candidate-nav-link active"
+                href="<?php echo esc_url(
+                    home_url('/candidate-profile/')
+                ); ?>"
+            >
+                My Profile
+            </a>
 
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    get_post_type_archive_link('job')
+                ); ?>"
+            >
+                Browse Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    wp_logout_url(
+                        home_url('/candidate-login/')
+                    )
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
 
         <form
             method="post"

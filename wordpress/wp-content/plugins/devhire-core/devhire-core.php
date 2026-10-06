@@ -40,6 +40,7 @@ require_once DEVHIRE_CORE_PATH . 'includes/rest-api.php';
 require_once DEVHIRE_CORE_PATH . 'includes/job-search.php';
 require_once DEVHIRE_CORE_PATH . 'includes/candidates.php';
 require_once DEVHIRE_CORE_PATH . 'includes/candidate-profile.php';
+require_once DEVHIRE_CORE_PATH . 'includes/employers.php';
 
 
 /**

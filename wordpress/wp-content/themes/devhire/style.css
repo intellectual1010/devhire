@@ -2214,3 +2214,139 @@ a {
         margin-left: 0;
     }
 }
+
+/* Candidate Dashboard Statistics */
+
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.dashboard-stats .dashboard-stat {
+    margin: 0;
+}
+
+@media (max-width: 900px) {
+    .dashboard-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 520px) {
+    .dashboard-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Application Progress */
+
+.application-progress {
+    grid-column: 1 / -1;
+
+    display: flex;
+    align-items: flex-start;
+
+    width: 100%;
+    margin-top: 18px;
+    padding-top: 18px;
+
+    border-top: 1px solid #20324a;
+}
+
+.progress-step {
+    position: relative;
+
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.progress-step:not(:last-child)::after {
+    content: "";
+
+    position: absolute;
+    top: 6px;
+    left: 50%;
+
+    width: 100%;
+    height: 2px;
+
+    background: #20324a;
+}
+
+.progress-dot {
+    position: relative;
+    z-index: 2;
+
+    width: 14px;
+    height: 14px;
+
+    margin-bottom: 8px;
+
+    border: 2px solid #475569;
+    border-radius: 50%;
+
+    background: #0d1929;
+}
+
+.progress-step.completed .progress-dot,
+.progress-step.current .progress-dot {
+    border-color: #22d3ee;
+    background: #22d3ee;
+}
+
+.progress-step.completed:not(:last-child)::after {
+    background: #22d3ee;
+}
+
+.progress-step.current {
+    color: #f8fafc;
+}
+
+.progress-step.completed {
+    color: #94a3b8;
+}
+
+.application-progress-rejected {
+    width: 100%;
+    padding: 10px 14px;
+
+    border: 1px solid #7f1d1d;
+    border-radius: 8px;
+
+    color: #fca5a5;
+    background: rgba(127, 29, 29, 0.15);
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+@media (max-width: 520px) {
+    .progress-label {
+        font-size: 10px;
+    }
+}
+
+/* Employer job actions */
+
+.application-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.job-status-form {
+    margin: 0;
+}
+
+.job-status-form button {
+    cursor: pointer;
+}

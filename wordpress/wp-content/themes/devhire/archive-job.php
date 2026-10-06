@@ -350,22 +350,24 @@ $jobs = new WP_Query($args);
             <div class="pagination">
 
                 <?php
-                echo wp_kses_post(
-                    paginate_links([
-                        'total'   => $jobs->max_num_pages,
-                        'current' => $paged,
+                $pagination = paginate_links([
+                    'total'   => $jobs->max_num_pages,
+                    'current' => $paged,
 
-                        'add_args' => array_filter([
-                            'keyword'  => $keyword,
-                            'skill'    => $skill,
-                            'job_type' => $job_type,
-                            'location' => $location,
-                        ]),
+                    'add_args' => array_filter([
+                        'keyword'  => $keyword,
+                        'skill'    => $skill,
+                        'job_type' => $job_type,
+                        'location' => $location,
+                    ]),
 
-                        'prev_text' => '&larr; Previous',
-                        'next_text' => 'Next &rarr;',
-                    ])
-                );
+                    'prev_text' => '&larr; Previous',
+                    'next_text' => 'Next &rarr;',
+                ]);
+
+                if ($pagination) {
+                    echo wp_kses_post($pagination);
+                }
                 ?>
 
             </div>
