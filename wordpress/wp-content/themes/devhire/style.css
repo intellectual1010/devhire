@@ -2672,3 +2672,201 @@ a {
         grid-column: auto;
     }
 }
+/* ================================
+   Candidate + Employer Profile Forms
+================================ */
+
+.candidate-profile {
+    width: min(1100px, 92%);
+    margin: 60px auto;
+}
+
+.candidate-profile .profile-header,
+.employer-profile .profile-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 30px;
+    margin-bottom: 24px;
+}
+
+.candidate-profile .profile-header h1,
+.employer-profile .profile-header h1 {
+    margin: 0 0 8px;
+    font-size: clamp(30px, 4vw, 42px);
+    line-height: 1.15;
+}
+
+.candidate-profile .profile-header p,
+.employer-profile .profile-header p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.candidate-profile-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+    padding: 30px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.candidate-profile-form .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.candidate-profile-form .form-field label {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.candidate-profile-form .form-field input,
+.candidate-profile-form .form-field textarea,
+.candidate-profile-form .form-field select {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    background: var(--background);
+    color: var(--text);
+    font: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.candidate-profile-form .form-field input,
+.candidate-profile-form .form-field select {
+    min-height: 46px;
+}
+
+.candidate-profile-form .form-field textarea {
+    min-height: 150px;
+    resize: vertical;
+}
+
+.candidate-profile-form .form-field input:focus,
+.candidate-profile-form .form-field textarea:focus,
+.candidate-profile-form .form-field select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.08);
+}
+
+.candidate-profile-form .form-field input:disabled {
+    background: #091421;
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+.candidate-profile-form .form-field small {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.candidate-profile-form .form-field:has(textarea),
+.candidate-profile-form .form-field:has(input[type="file"]) {
+    grid-column: 1 / -1;
+}
+
+.candidate-profile-form input[type="file"] {
+    min-height: auto;
+    padding: 10px;
+    cursor: pointer;
+}
+
+.candidate-profile-form input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 9px 13px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-light);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.candidate-profile-form input[type="file"]::file-selector-button:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.candidate-profile-form input[type="checkbox"] {
+    width: 16px;
+    min-height: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--primary);
+}
+
+.candidate-profile-form button[type="submit"],
+.candidate-profile-form input[type="submit"] {
+    width: fit-content;
+    min-width: 140px;
+    min-height: 46px;
+    padding: 11px 20px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--primary);
+    color: #04111c;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
+.candidate-profile-form button[type="submit"]:hover,
+.candidate-profile-form input[type="submit"]:hover {
+    background: var(--primary-dark);
+}
+
+/* Employer Post/Edit Job forms reuse candidate-profile-form. */
+.employer-dashboard .candidate-profile-form,
+.employer-job-form {
+    margin-top: 0;
+}
+
+.employer-job-form .form-field:has(textarea) {
+    grid-column: 1 / -1;
+}
+
+.candidate-profile-form select option {
+    background: var(--surface);
+    color: var(--text);
+}
+
+@media (max-width: 700px) {
+    .candidate-profile {
+        width: min(100% - 30px, 1100px);
+        margin: 35px auto;
+    }
+
+    .candidate-profile .profile-header,
+    .employer-profile .profile-header {
+        flex-direction: column;
+    }
+
+    .candidate-profile-form {
+        grid-template-columns: 1fr;
+        padding: 22px;
+    }
+
+    .candidate-profile-form .form-field:has(textarea),
+    .candidate-profile-form .form-field:has(input[type="file"]),
+    .employer-job-form .form-field:has(textarea) {
+        grid-column: auto;
+    }
+
+    .candidate-profile-form button[type="submit"],
+    .candidate-profile-form input[type="submit"] {
+        width: 100%;
+    }
+}
