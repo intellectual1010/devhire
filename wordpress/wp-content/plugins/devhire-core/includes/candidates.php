@@ -191,11 +191,18 @@ function devhire_handle_candidate_registration() {
 
 
     /*
-     * Redirect to candidate dashboard.
+     * Return to the requested page after registration.
      */
-    wp_safe_redirect(
-        home_url('/candidate-dashboard/')
-    );
+    $redirect_to = isset($_POST['redirect_to'])
+        ? wp_validate_redirect(
+            esc_url_raw(
+                wp_unslash($_POST['redirect_to'])
+            ),
+            home_url('/candidate-dashboard/')
+        )
+        : home_url('/candidate-dashboard/');
+
+    wp_safe_redirect($redirect_to);
 
     exit;
 }
@@ -227,18 +234,54 @@ add_action(
 
 function devhire_candidate_register_shortcode() {
 
+    $redirect_to = isset($_REQUEST['redirect_to'])
+        ? wp_validate_redirect(
+            esc_url_raw(
+                wp_unslash($_REQUEST['redirect_to'])
+            ),
+            home_url('/candidate-dashboard/')
+        )
+        : home_url('/candidate-dashboard/');
+
+    $application_error = isset($_REQUEST['application_error'])
+        ? sanitize_key(
+            wp_unslash($_REQUEST['application_error'])
+        )
+        : '';
+
     /*
      * Already logged in.
      */
     if (is_user_logged_in()) {
 
+        $current_user = wp_get_current_user();
+
+        if (in_array('candidate', (array) $current_user->roles, true)) {
+
+            return sprintf(
+                '<div class="devhire-notice success">
+                    You already have a candidate account.
+                    <a href="%s">Continue</a>
+                </div>',
+                esc_url($redirect_to)
+            );
+        }
+
         return sprintf(
-            '<div class="devhire-notice success">
-                You are already logged in.
-                <a href="%s">View Dashboard</a>
+            '<div class="devhire-notice error">
+                You are currently signed in with a non-candidate account.
+                <a href="%s">
+                    Log out and create a candidate account
+                </a>
             </div>',
             esc_url(
-                home_url('/candidate-dashboard/')
+                wp_logout_url(
+                    add_query_arg(
+                        'redirect_to',
+                        $redirect_to,
+                        home_url('/candidate-register/')
+                    )
+                )
             )
         );
     }
@@ -302,6 +345,15 @@ function devhire_candidate_register_shortcode() {
 
 
     ob_start();
+
+    if ($application_error === 'login_required') {
+        ?>
+        <div class="devhire-notice error">
+            Create a candidate account to apply for this job.
+            After registration, you will return to the job automatically.
+        </div>
+        <?php
+    }
     ?>
 
     <div class="candidate-auth">
@@ -351,6 +403,18 @@ function devhire_candidate_register_shortcode() {
                 'devhire_register_nonce'
             );
             ?>
+
+            <input
+                type="hidden"
+                name="redirect_to"
+                value="<?php echo esc_attr($redirect_to); ?>"
+            >
+
+            <input
+                type="hidden"
+                name="application_error"
+                value="<?php echo esc_attr($application_error); ?>"
+            >
 
 
             <div class="form-field">
@@ -421,7 +485,13 @@ function devhire_candidate_register_shortcode() {
 
             <a href="<?php
             echo esc_url(
-                home_url('/candidate-login/')
+                add_query_arg(
+                    [
+                        'redirect_to'       => $redirect_to,
+                        'application_error' => $application_error,
+                    ],
+                    home_url('/candidate-login/')
+                )
             );
             ?>">
                 Sign in
@@ -450,21 +520,55 @@ add_shortcode(
 
 function devhire_candidate_login_shortcode() {
 
+    $redirect_to = isset($_REQUEST['redirect_to'])
+        ? wp_validate_redirect(
+            esc_url_raw(
+                wp_unslash($_REQUEST['redirect_to'])
+            ),
+            home_url('/candidate-dashboard/')
+        )
+        : home_url('/candidate-dashboard/');
+
     if (is_user_logged_in()) {
 
+        $current_user = wp_get_current_user();
+
+        if (in_array('candidate', (array) $current_user->roles, true)) {
+
+            return sprintf(
+                '<div class="devhire-notice success">
+                    You are logged in.
+                    <a href="%s">Continue</a>
+                </div>',
+                esc_url($redirect_to)
+            );
+        }
+
         return sprintf(
-            '<div class="devhire-notice success">
-                You are logged in.
-                <a href="%s">View Dashboard</a>
+            '<div class="devhire-notice error">
+                This page requires a candidate account.
+                <a href="%s">View Candidate Login</a>
             </div>',
             esc_url(
-                home_url('/candidate-dashboard/')
+                wp_logout_url(
+                    add_query_arg(
+                        'redirect_to',
+                        $redirect_to,
+                        home_url('/candidate-login/')
+                    )
+                )
             )
         );
     }
 
 
     $error = '';
+
+    $application_error = isset($_REQUEST['application_error'])
+        ? sanitize_key(
+            wp_unslash($_REQUEST['application_error'])
+        )
+        : '';
 
 
     if (
@@ -520,11 +624,7 @@ function devhire_candidate_login_shortcode() {
 
             if (!is_wp_error($login)) {
 
-                wp_safe_redirect(
-                    home_url(
-                        '/candidate-dashboard/'
-                    )
-                );
+                wp_safe_redirect($redirect_to);
 
                 exit;
             }
@@ -541,6 +641,15 @@ function devhire_candidate_login_shortcode() {
     ob_start();
 
     echo wp_kses_post($error);
+
+    if ($application_error === 'login_required') {
+        ?>
+        <div class="devhire-notice error">
+            Please sign in with your candidate account to apply for this job.
+            After signing in, you will return to the job automatically.
+        </div>
+        <?php
+    }
     ?>
 
     <div class="candidate-auth">
@@ -562,6 +671,18 @@ function devhire_candidate_login_shortcode() {
                 'devhire_login_nonce'
             );
             ?>
+
+            <input
+                type="hidden"
+                name="redirect_to"
+                value="<?php echo esc_attr($redirect_to); ?>"
+            >
+
+            <input
+                type="hidden"
+                name="application_error"
+                value="<?php echo esc_attr($application_error); ?>"
+            >
 
 
             <div class="form-field">
@@ -614,7 +735,13 @@ function devhire_candidate_login_shortcode() {
 
             <a href="<?php
             echo esc_url(
-                home_url('/candidate-register/')
+                add_query_arg(
+                    [
+                        'redirect_to'       => $redirect_to,
+                        'application_error' => $application_error,
+                    ],
+                    home_url('/candidate-register/')
+                )
             );
             ?>">
                 Create account
@@ -913,29 +1040,6 @@ function devhire_candidate_dashboard_shortcode() {
                                 )
                             )
                         );
-
-                    /*
-                    * Application progress.
-                    */
-                    $progress_steps = [
-                        'New',
-                        'Reviewing',
-                        'Interview',
-                        'Hired',
-                    ];
-
-                    $current_step = array_search(
-                        $status,
-                        $progress_steps,
-                        true
-                    );
-
-                    if ($current_step === false) {
-                        $current_step = -1;
-                    }
-
-                    $is_rejected = ($status === 'Rejected');
-
                     ?>
 
                     <article class="application-card">
@@ -1009,44 +1113,6 @@ function devhire_candidate_dashboard_shortcode() {
                             ?>
 
                         </span>
-
-                        <div class="application-progress">
-
-                            <?php if ($is_rejected) : ?>
-
-                                <div class="application-progress-rejected">
-                                    Application Rejected
-                                </div>
-
-                            <?php else : ?>
-
-                                <?php foreach ($progress_steps as $index => $step) : ?>
-
-                                    <?php
-                                    $step_class = '';
-
-                                    if ($index < $current_step) {
-                                        $step_class = 'completed';
-                                    } elseif ($index === $current_step) {
-                                        $step_class = 'current';
-                                    }
-                                    ?>
-
-                                    <div class="progress-step <?php echo esc_attr($step_class); ?>">
-
-                                        <span class="progress-dot"></span>
-
-                                        <span class="progress-label">
-                                            <?php echo esc_html($step); ?>
-                                        </span>
-
-                                    </div>
-
-                                <?php endforeach; ?>
-
-                            <?php endif; ?>
-
-                        </div>
 
                     </article>
 

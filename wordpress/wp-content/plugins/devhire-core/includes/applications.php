@@ -9,6 +9,12 @@ if (!defined('ABSPATH')) {
  */
 function devhire_job_is_expired($job_id) {
 
+    $job_id = absint($job_id);
+
+    if (!$job_id) {
+        return false;
+    }
+
     $deadline = get_post_meta(
         $job_id,
         '_devhire_deadline',
@@ -35,6 +41,46 @@ function devhire_job_is_expired($job_id) {
     );
 
     return $deadline_date < $now;
+}
+
+/**
+ * Check whether a candidate has already applied to a job.
+ */
+function devhire_candidate_has_applied($job_id, $user_id) {
+
+    $job_id  = absint($job_id);
+    $user_id = absint($user_id);
+
+    if (!$job_id || !$user_id) {
+        return false;
+    }
+
+    $existing_application = get_posts([
+        'post_type'              => 'job_application',
+        'post_status'            => 'private',
+        'posts_per_page'         => 1,
+        'fields'                 => 'ids',
+        'no_found_rows'          => true,
+        'update_post_meta_cache' => false,
+        'update_post_term_cache' => false,
+        'meta_query'             => [
+            'relation' => 'AND',
+            [
+                'key'     => '_devhire_application_job',
+                'value'   => $job_id,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ],
+            [
+                'key'     => '_devhire_candidate_user',
+                'value'   => $user_id,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ],
+        ],
+    ]);
+
+    return !empty($existing_application);
 }
 
 /**
@@ -222,34 +268,19 @@ function devhire_application_form_shortcode() {
 
     $already_applied = false;
 
-    $existing_application = get_posts([
-        'post_type'      => 'job_application',
-        'post_status'    => 'private',
-        'posts_per_page' => 1,
-        'fields'         => 'ids',
-        'meta_query'     => [
-            'relation' => 'AND',
-            [
-                'key'     => '_devhire_application_job',
-                'value'   => $job_id,
-                'compare' => '=',
-                'type'    => 'NUMERIC',
-            ],
-            [
-                'key'     => '_devhire_candidate_user',
-                'value'   => $current_user->ID,
-                'compare' => '=',
-                'type'    => 'NUMERIC',
-            ],
-        ],
-    ]);
-
-    $already_applied = !empty($existing_application);
+    $already_applied = devhire_candidate_has_applied(
+        $job_id,
+        $current_user->ID
+    );
 
     $application_success = (
         isset($_GET['application']) &&
         sanitize_key(wp_unslash($_GET['application'])) === 'success'
     );
+
+    $application_error = isset($_GET['application_error'])
+        ? sanitize_key(wp_unslash($_GET['application_error']))
+        : '';
 
     if ($application_success && $already_applied) {
         ?>
@@ -280,6 +311,77 @@ function devhire_application_form_shortcode() {
 
         <?php
         return ob_get_clean();
+    }
+
+    if ($application_error === 'invalid_account') {
+        ?>
+
+        <div class="application-login-required">
+
+            <span class="application-login-badge">
+                Candidate Account Required
+            </span>
+
+            <h3>Please use a candidate account to apply.</h3>
+
+            <p>
+                Employer and administrator accounts cannot submit job applications.
+                Sign in with a candidate account to continue.
+            </p>
+
+            <a
+                href="<?php echo esc_url(home_url('/candidate-login/')); ?>"
+                class="button button-primary"
+            >
+                Candidate Login
+            </a>
+
+        </div>
+
+        <?php
+
+        return ob_get_clean();
+    }
+
+    if ($application_error === 'invalid_request') {
+        ?>
+
+        <div class="application-login-required">
+
+            <span class="application-login-badge">
+                Application Error
+            </span>
+
+            <h3>Your application request could not be verified.</h3>
+
+            <p>
+                Please refresh this page and submit your application again.
+            </p>
+
+        </div>
+
+        <?php
+    }
+
+    if ($application_error === 'invalid_fields') {
+        ?>
+
+        <div class="application-login-required">
+
+            <span class="application-login-badge">
+                Application Error
+            </span>
+
+            <h3>Please complete the required application fields.</h3>
+
+            <p>
+                Your application was not submitted. Please enter your
+                application message and try again.
+            </p>
+
+        </div>
+
+        <?php
     }
 
     if (!$resume_url) {
@@ -571,8 +673,8 @@ function devhire_handle_application_submission() {
     ) {
         wp_safe_redirect(
             add_query_arg(
-                'application',
-                'error',
+                'application_error',
+                'invalid_request',
                 $job_url
             )
         );
@@ -611,8 +713,10 @@ function devhire_handle_application_submission() {
 
         wp_safe_redirect(
             add_query_arg(
-                'application_error',
-                'login_required',
+                [
+                    'application_error' => 'login_required',
+                    'redirect_to'       => get_permalink($job_id),
+                ],
                 home_url('/candidate-login/')
             )
         );
@@ -623,7 +727,16 @@ function devhire_handle_application_submission() {
     $current_user = wp_get_current_user();
 
     if (!in_array('candidate', (array) $current_user->roles, true)) {
-        wp_die('Only candidate accounts can submit job applications.');
+
+        wp_safe_redirect(
+            add_query_arg(
+                'application_error',
+                'invalid_account',
+                $job_url
+            )
+        );
+
+        exit;
     }
 
     /*
@@ -646,29 +759,12 @@ function devhire_handle_application_submission() {
     * Prevent duplicate applications.
     */
 
-    $existing_application = get_posts([
-        'post_type'      => 'job_application',
-        'post_status'    => 'private',
-        'posts_per_page' => 1,
-        'fields'         => 'ids',
-        'meta_query'     => [
-            'relation' => 'AND',
-            [
-                'key'     => '_devhire_application_job',
-                'value'   => $job_id,
-                'compare' => '=',
-                'type'    => 'NUMERIC',
-            ],
-            [
-                'key'     => '_devhire_candidate_user',
-                'value'   => $current_user->ID,
-                'compare' => '=',
-                'type'    => 'NUMERIC',
-            ],
-        ],
-    ]);
-
-    if (!empty($existing_application)) {
+    if (
+        devhire_candidate_has_applied(
+            $job_id,
+            $current_user->ID
+        )
+    ) {
 
         wp_safe_redirect(
             add_query_arg(
@@ -730,8 +826,8 @@ function devhire_handle_application_submission() {
     ) {
         wp_safe_redirect(
             add_query_arg(
-                'application',
-                'error',
+                'application_error',
+                'invalid_fields',
                 $job_url
             )
         );
@@ -759,8 +855,10 @@ function devhire_handle_application_submission() {
 
         wp_safe_redirect(
             add_query_arg(
-                'application_error',
-                'resume_required',
+                [
+                    'application_error' => 'resume_required',
+                    'redirect_to'       => $job_url,
+                ],
                 home_url('/candidate-profile/')
             )
         );

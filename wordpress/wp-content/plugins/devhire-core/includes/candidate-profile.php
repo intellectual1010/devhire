@@ -10,6 +10,21 @@ if (!defined('ABSPATH')) {
  */
 function devhire_candidate_profile_shortcode() {
 
+    $redirect_to = isset($_REQUEST['redirect_to'])
+        ? wp_validate_redirect(
+            esc_url_raw(
+                wp_unslash($_REQUEST['redirect_to'])
+            ),
+            home_url('/candidate-dashboard/')
+        )
+        : home_url('/candidate-dashboard/');
+
+    $application_error = isset($_REQUEST['application_error'])
+        ? sanitize_key(
+            wp_unslash($_REQUEST['application_error'])
+        )
+        : '';
+
     if (!is_user_logged_in()) {
 
         return sprintf(
@@ -231,6 +246,14 @@ function devhire_candidate_profile_shortcode() {
                         }
 
 
+                        if (
+                            $application_error === 'resume_required' &&
+                            $redirect_to !== home_url('/candidate-dashboard/')
+                        ) {
+                            wp_safe_redirect($redirect_to);
+                            exit;
+                        }
+
                         $message =
                             '<div class="devhire-notice success">
                                 Profile and resume updated successfully.
@@ -317,6 +340,18 @@ function devhire_candidate_profile_shortcode() {
     ob_start();
 
     echo wp_kses_post($message);
+
+    if (
+        $application_error === 'resume_required' &&
+        !$resume_url
+    ) {
+        ?>
+        <div class="devhire-notice error">
+            A resume is required before you can apply for this job.
+            Upload your resume below, then save your profile.
+        </div>
+        <?php
+    }
     ?>
 
     <div class="candidate-profile">
@@ -396,6 +431,18 @@ function devhire_candidate_profile_shortcode() {
                 'devhire_profile_nonce'
             );
             ?>
+
+            <input
+                type="hidden"
+                name="redirect_to"
+                value="<?php echo esc_attr($redirect_to); ?>"
+            >
+
+            <input
+                type="hidden"
+                name="application_error"
+                value="<?php echo esc_attr($application_error); ?>"
+            >
 
 
             <div class="form-field">
