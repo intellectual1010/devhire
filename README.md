@@ -205,7 +205,7 @@ The project includes null-safe pagination handling to avoid PHP 8.x deprecation 
 
 ## Demo
 
-Live Demo: <demo-url>
+Live Demo: https://devhire-demo.ifree.page/
 
 ## What This Project Demonstrates
 
