@@ -62,8 +62,71 @@ function devhire_application_form_shortcode() {
         }
     }
 
+    $deadline = get_post_meta(
+        $job_id,
+        '_devhire_deadline',
+        true
+    );
+
+    $is_expired = false;
+
+    if ($deadline) {
+
+        $deadline_timestamp = strtotime(
+            $deadline . ' 23:59:59'
+        );
+
+        if (
+            $deadline_timestamp &&
+            $deadline_timestamp < current_time('timestamp')
+        ) {
+            $is_expired = true;
+        }
+    }
+
     ob_start();
     ?>
+
+    <?php if ($is_expired) : ?>
+
+        <div class="application-closed">
+
+            <span class="application-closed-badge">
+                Applications Closed
+            </span>
+
+            <h3>This job is no longer accepting applications.</h3>
+
+            <p>
+                The application deadline was
+                <strong>
+                    <?php
+                    echo esc_html(
+                        date_i18n(
+                            get_option('date_format'),
+                            strtotime($deadline)
+                        )
+                    );
+                    ?>
+                </strong>.
+            </p>
+
+            <a
+                href="<?php echo esc_url(
+                    get_post_type_archive_link('job')
+                ); ?>"
+                class="secondary-button"
+            >
+                Browse Other Jobs
+            </a>
+
+        </div>
+
+        <?php
+        return ob_get_clean();
+        ?>
+
+    <?php endif; ?>
 
     <div
         class="devhire-application-form"
@@ -387,6 +450,35 @@ function devhire_handle_application_submission() {
     ) {
         wp_safe_redirect($fallback_url);
         exit;
+    }
+
+    $deadline = get_post_meta(
+        $job_id,
+        '_devhire_deadline',
+        true
+    );
+
+    if ($deadline) {
+
+        $deadline_timestamp = strtotime(
+            $deadline . ' 23:59:59'
+        );
+
+        if (
+            $deadline_timestamp &&
+            $deadline_timestamp < current_time('timestamp')
+        ) {
+
+            wp_safe_redirect(
+                add_query_arg(
+                    'application_error',
+                    'expired',
+                    get_permalink($job_id)
+                )
+            );
+
+            exit;
+        }
     }
 
 

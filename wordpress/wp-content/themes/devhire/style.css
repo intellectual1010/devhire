@@ -2518,3 +2518,75 @@ a {
     color: #fcd34d;
     border: 1px solid rgba(245, 158, 11, 0.35);
 }
+
+.employer-job-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 24px;
+}
+
+.employer-job-search input {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 14px;
+    background: #0d1929;
+    color: #f8fafc;
+    border: 1px solid #20324a;
+    border-radius: 8px;
+}
+
+.employer-job-search input:focus {
+    outline: none;
+    border-color: #22d3ee;
+}
+
+@media (max-width: 640px) {
+    .employer-job-search {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
+.employer-job-status.expired {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.employer-job-deadline {
+    display: inline-flex;
+    align-items: center;
+    color: #94a3b8;
+    font-size: 13px;
+    margin-left: 8px;
+}
+
+.application-closed {
+    padding: 28px;
+    background: #0d1929;
+    border: 1px solid #20324a;
+    border-radius: 12px;
+}
+
+.application-closed-badge {
+    display: inline-flex;
+    padding: 5px 10px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 999px;
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.application-closed h3 {
+    margin: 0 0 8px;
+}
+
+.application-closed p {
+    margin: 0 0 20px;
+    color: #94a3b8;
+}

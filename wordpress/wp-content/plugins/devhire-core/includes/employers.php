@@ -521,6 +521,10 @@ function devhire_employer_dashboard_shortcode() {
 
     $user = wp_get_current_user();
 
+    $job_search = isset($_GET['job_search'])
+        ? sanitize_text_field(wp_unslash($_GET['job_search']))
+        : '';
+
     if (!in_array('employer', (array) $user->roles, true)) {
         return '<div class="devhire-notice error">
             This dashboard is available only to employer accounts.
@@ -533,7 +537,7 @@ function devhire_employer_dashboard_shortcode() {
      * We use post_author so WordPress itself owns the
      * employer -> job relationship.
      */
-    $jobs = new WP_Query([
+    $all_jobs = new WP_Query([
         'post_type'      => 'job',
         'post_status'    => ['publish', 'draft', 'pending'],
         'author'         => $user->ID,
@@ -542,14 +546,46 @@ function devhire_employer_dashboard_shortcode() {
         'order'          => 'DESC',
     ]);
 
-    $total_jobs     = $jobs->found_posts;
+    $jobs = new WP_Query([
+        'post_type'      => 'job',
+        'post_status'    => ['publish', 'draft', 'pending'],
+        'author'         => $user->ID,
+        'posts_per_page' => -1,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+        's'              => $job_search,
+    ]);
+
+    $total_jobs     = 0;
     $published_jobs = 0;
     $draft_jobs     = 0;
     $job_ids        = [];
 
-    foreach ($jobs->posts as $job) {
+    foreach ($all_jobs->posts as $job) {
 
-        $job_ids[] = $job->ID;
+        $job_id = $job->ID;
+
+        $deadline = get_post_meta(
+            $job_id,
+            '_devhire_deadline',
+            true
+        );
+
+        $is_expired = false;
+
+        if ($deadline) {
+            $deadline_timestamp = strtotime($deadline . ' 23:59:59');
+
+            if (
+                $deadline_timestamp &&
+                $deadline_timestamp < current_time('timestamp')
+            ) {
+                $is_expired = true;
+            }
+        }
+
+        $job_ids[] = $job_id;
+        $total_jobs++;
 
         if ($job->post_status === 'publish') {
             $published_jobs++;
@@ -746,6 +782,42 @@ function devhire_employer_dashboard_shortcode() {
 
         </div>
 
+        <form
+            method="get"
+            action="<?php echo esc_url(
+                home_url('/employer-dashboard/')
+            ); ?>"
+            class="employer-job-search"
+        >
+            <input
+                type="search"
+                name="job_search"
+                value="<?php echo esc_attr($job_search); ?>"
+                placeholder="Search your jobs..."
+            >
+
+            <button
+                type="submit"
+                class="primary-button"
+            >
+                Search
+            </button>
+
+            <?php if ($job_search) : ?>
+
+                <a
+                    href="<?php echo esc_url(
+                        home_url('/employer-dashboard/')
+                    ); ?>"
+                    class="secondary-button"
+                >
+                    Clear
+                </a>
+
+            <?php endif; ?>
+
+        </form>
+
 
         <div class="employer-jobs">
 
@@ -857,6 +929,28 @@ function devhire_employer_dashboard_shortcode() {
                                 <span class="employer-job-status <?php echo esc_attr($status_class); ?>">
                                     <?php echo esc_html($status_label); ?>
                                 </span>
+
+                                <?php if ($is_expired) : ?>
+
+                                    <span class="employer-job-status expired">
+                                        Expired
+                                    </span>
+
+                                <?php elseif ($deadline) : ?>
+
+                                    <span class="employer-job-deadline">
+                                        Deadline:
+                                        <?php
+                                        echo esc_html(
+                                            date_i18n(
+                                                get_option('date_format'),
+                                                strtotime($deadline)
+                                            )
+                                        );
+                                        ?>
+                                    </span>
+
+                                <?php endif; ?>
 
                                 <h3>
                                     <?php the_title(); ?>
@@ -1064,21 +1158,44 @@ function devhire_employer_dashboard_shortcode() {
 
                 <div class="dashboard-empty-state">
 
-                    <h3>No jobs posted yet</h3>
+                    <?php if ($job_search) : ?>
 
-                    <p>
-                        Create your first job listing to start
-                        receiving applications.
-                    </p>
+                        <h3>No matching jobs</h3>
 
-                    <a
-                        class="primary-button"
-                        href="<?php echo esc_url(
-                            home_url('/employer-post-job/')
-                        ); ?>"
-                    >
-                        Post Your First Job
-                    </a>
+                        <p>
+                            No jobs matched
+                            <strong>
+                                "<?php echo esc_html($job_search); ?>"
+                            </strong>.
+                        </p>
+
+                        <a
+                            class="secondary-button"
+                            href="<?php echo esc_url(
+                                home_url('/employer-dashboard/')
+                            ); ?>"
+                        >
+                            Clear Search
+                        </a>
+
+                    <?php else : ?>
+
+                        <h3>No jobs yet</h3>
+
+                        <p>
+                            You haven't created any job postings yet.
+                        </p>
+
+                        <a
+                            class="primary-button"
+                            href="<?php echo esc_url(
+                                home_url('/employer-post-job/')
+                            ); ?>"
+                        >
+                            Post Your First Job
+                        </a>
+
+                    <?php endif; ?>
 
                 </div>
 
