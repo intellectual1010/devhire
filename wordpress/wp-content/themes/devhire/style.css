@@ -3995,3 +3995,368 @@ a {
     }
 }
 
+/* ================================
+   Step 21.14 - Employer Account Summary
+================================ */
+
+.employer-account-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+    gap: 28px;
+
+    margin: 28px 0;
+    padding: 28px;
+
+    border: 1px solid var(--border);
+    border-radius: 18px;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(34, 211, 238, 0.06),
+            rgba(139, 92, 246, 0.055)
+        ),
+        var(--surface);
+}
+
+.employer-account-summary-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    min-width: 0;
+}
+
+.employer-account-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 62px;
+
+    width: 62px;
+    height: 62px;
+
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    border-radius: 16px;
+
+    background: rgba(34, 211, 238, 0.1);
+    color: var(--primary);
+
+    font-size: 25px;
+    font-weight: 800;
+}
+
+.employer-account-details {
+    min-width: 0;
+}
+
+.employer-account-details h2 {
+    margin: 5px 0 5px;
+    color: var(--text);
+    font-size: clamp(22px, 3vw, 28px);
+}
+
+.employer-account-details > p {
+    margin: 0;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.employer-account-company {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    margin-top: 20px;
+    padding: 13px 15px;
+
+    border: 1px solid var(--border);
+    border-radius: 12px;
+
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.employer-account-company-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 44px;
+
+    width: 44px;
+    height: 44px;
+
+    overflow: hidden;
+
+    border: 1px solid var(--border);
+    border-radius: 10px;
+
+    background: var(--background, #07111f);
+    color: var(--primary);
+
+    font-weight: 800;
+}
+
+.employer-account-company-logo .company-logo-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.employer-account-company strong,
+.employer-account-company span {
+    display: block;
+}
+
+.employer-account-company strong {
+    color: var(--text);
+}
+
+.employer-account-company span {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.employer-account-warning {
+    margin-top: 14px !important;
+    color: #f59e0b !important;
+}
+
+.employer-company-completeness {
+    padding-left: 28px;
+    border-left: 1px solid var(--border);
+}
+
+.employer-company-completeness-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+
+    margin-bottom: 12px;
+}
+
+.employer-company-completeness-heading span {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.employer-company-completeness-heading strong {
+    color: var(--primary);
+    font-size: 22px;
+}
+
+.employer-company-completeness > p {
+    margin: 12px 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.employer-company-completeness > p.complete {
+    color: var(--primary);
+}
+
+.employer-account-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+
+    margin-top: 20px;
+}
+
+.employer-account-actions .primary-button,
+.employer-account-actions .secondary-button {
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+
+    .employer-account-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .employer-company-completeness {
+        padding-top: 24px;
+        padding-left: 0;
+
+        border-top: 1px solid var(--border);
+        border-left: 0;
+    }
+}
+
+@media (max-width: 600px) {
+
+    .employer-account-summary {
+        gap: 22px;
+        padding: 22px;
+    }
+
+    .employer-account-summary-main {
+        align-items: flex-start;
+    }
+
+    .employer-account-avatar {
+        flex-basis: 50px;
+
+        width: 50px;
+        height: 50px;
+
+        border-radius: 13px;
+
+        font-size: 20px;
+    }
+
+    .employer-account-company {
+        align-items: flex-start;
+    }
+
+    .employer-account-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .employer-account-actions .primary-button,
+    .employer-account-actions .secondary-button {
+        width: 100%;
+    }
+}
+
+/* ================================
+   Step 21.16 - Employer Company Profile Guidance
+================================ */
+
+.employer-profile-guidance {
+    margin: 28px 0;
+    padding: 26px 28px;
+
+    border: 1px solid var(--border);
+    border-radius: 18px;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(34, 211, 238, 0.055),
+            rgba(139, 92, 246, 0.05)
+        ),
+        var(--surface);
+}
+
+.employer-profile-guidance-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+
+    margin-bottom: 16px;
+}
+
+.employer-profile-guidance-header h2 {
+    margin: 5px 0 0;
+    color: var(--text);
+    font-size: clamp(21px, 3vw, 27px);
+}
+
+.employer-profile-percentage {
+    flex: 0 0 auto;
+
+    color: var(--primary);
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.employer-profile-guidance .candidate-profile-progress {
+    margin-top: 0;
+}
+
+.employer-profile-guidance-message {
+    margin: 15px 0 0;
+
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.employer-profile-guidance-message.complete {
+    color: var(--primary);
+}
+
+.employer-missing-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    margin-top: 15px;
+}
+
+.employer-missing-fields span {
+    display: inline-flex;
+    align-items: center;
+
+    padding: 7px 11px;
+
+    border: 1px solid var(--border);
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.employer-logo-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    margin-top: 20px;
+    padding-top: 20px;
+
+    border-top: 1px solid var(--border);
+}
+
+.employer-logo-status > span {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.employer-logo-status > strong {
+    color: var(--text);
+    font-size: 14px;
+}
+
+.employer-logo-status .secondary-button {
+    margin-left: auto;
+}
+
+.employer-company-form {
+    margin-top: 28px;
+}
+
+@media (max-width: 600px) {
+
+    .employer-profile-guidance {
+        padding: 22px;
+    }
+
+    .employer-profile-guidance-header {
+        gap: 14px;
+    }
+
+    .employer-profile-percentage {
+        font-size: 24px;
+    }
+
+    .employer-logo-status {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .employer-logo-status .secondary-button {
+        width: 100%;
+        margin-left: 0;
+
+        text-align: center;
+    }
+}
+

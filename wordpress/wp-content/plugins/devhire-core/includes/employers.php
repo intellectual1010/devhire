@@ -757,6 +757,97 @@ function devhire_employer_dashboard_shortcode() {
     }
 
     /*
+     * Employer/company account summary.
+     */
+    $employer_name = $user->display_name
+        ? $user->display_name
+        : $user->user_login;
+
+    $employer_email = $user->user_email;
+
+    $company_name        = '';
+    $company_website     = '';
+    $company_location    = '';
+    $company_industry    = '';
+    $company_size        = '';
+    $company_description = '';
+    $company_logo_id     = 0;
+
+    if ($company_id) {
+        $company_name = get_the_title($company_id);
+
+        $company_website = get_post_meta(
+            $company_id,
+            '_devhire_company_website',
+            true
+        );
+
+        $company_location = get_post_meta(
+            $company_id,
+            '_devhire_company_location',
+            true
+        );
+
+        $company_industry = get_post_meta(
+            $company_id,
+            '_devhire_company_industry',
+            true
+        );
+
+        $company_size = get_post_meta(
+            $company_id,
+            '_devhire_company_size',
+            true
+        );
+
+        $company_description = get_post_field(
+            'post_content',
+            $company_id
+        );
+
+        $company_logo_id = get_post_thumbnail_id(
+            $company_id
+        );
+    }
+
+    $company_profile_fields = [
+        'Company Name' => $company_name,
+        'Website'      => $company_website,
+        'Location'     => $company_location,
+        'Industry'     => $company_industry,
+        'Company Size' => $company_size,
+        'Description'  => trim(
+            wp_strip_all_tags($company_description)
+        ),
+        'Company Logo' => $company_logo_id,
+    ];
+
+    $completed_company_fields = 0;
+    $missing_company_fields   = [];
+
+    foreach (
+        $company_profile_fields as $label => $value
+    ) {
+        if (!empty($value)) {
+            $completed_company_fields++;
+        } else {
+            $missing_company_fields[] = $label;
+        }
+    }
+
+    $company_profile_completeness = $company_id
+        ? (int) round(
+            (
+                $completed_company_fields /
+                count($company_profile_fields)
+            ) * 100
+        )
+        : 0;
+
+    $company_profile_is_complete =
+        $company_profile_completeness === 100;
+
+    /*
      * Jobs belonging to this employer.
      *
      * We use post_author so WordPress itself owns the
@@ -924,6 +1015,230 @@ function devhire_employer_dashboard_shortcode() {
             </a>
 
         </nav>
+
+        <section class="employer-account-summary">
+
+            <div class="employer-account-summary-main">
+
+                <div class="employer-account-avatar">
+                    <?php
+                    echo esc_html(
+                        strtoupper(
+                            substr($employer_name, 0, 1)
+                        )
+                    );
+                    ?>
+                </div>
+
+                <div class="employer-account-details">
+
+                    <span class="application-job-label">
+                        Employer Account
+                    </span>
+
+                    <h2>
+                        <?php echo esc_html($employer_name); ?>
+                    </h2>
+
+                    <p>
+                        <?php echo esc_html($employer_email); ?>
+                    </p>
+
+                    <?php if ($company_id) : ?>
+
+                        <div class="employer-account-company">
+
+                            <div class="employer-account-company-logo">
+
+                                <?php if (
+                                    has_post_thumbnail($company_id)
+                                ) : ?>
+
+                                    <?php
+                                    echo get_the_post_thumbnail(
+                                        $company_id,
+                                        'thumbnail',
+                                        [
+                                            'class' =>
+                                                'company-logo-image',
+                                            'alt' =>
+                                                $company_name,
+                                            'loading' =>
+                                                'lazy',
+                                        ]
+                                    );
+                                    ?>
+
+                                <?php else : ?>
+
+                                    <span aria-hidden="true">
+                                        <?php
+                                        echo esc_html(
+                                            strtoupper(
+                                                substr(
+                                                    $company_name,
+                                                    0,
+                                                    1
+                                                )
+                                            )
+                                        );
+                                        ?>
+                                    </span>
+
+                                <?php endif; ?>
+
+                            </div>
+
+                            <div>
+                                <strong>
+                                    <?php
+                                    echo esc_html(
+                                        $company_name
+                                    );
+                                    ?>
+                                </strong>
+
+                                <?php if (
+                                    $company_industry ||
+                                    $company_location
+                                ) : ?>
+
+                                    <span>
+                                        <?php
+                                        echo esc_html(
+                                            implode(
+                                                ' · ',
+                                                array_filter([
+                                                    $company_industry,
+                                                    $company_location,
+                                                ])
+                                            )
+                                        );
+                                        ?>
+                                    </span>
+
+                                <?php endif; ?>
+                            </div>
+
+                        </div>
+
+                    <?php else : ?>
+
+                        <p class="employer-account-warning">
+                            Create your company profile before
+                            publishing jobs.
+                        </p>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+            <div class="employer-company-completeness">
+
+                <div class="employer-company-completeness-heading">
+
+                    <span>Company Profile</span>
+
+                    <strong>
+                        <?php
+                        echo esc_html(
+                            $company_profile_completeness
+                        );
+                        ?>%
+                    </strong>
+
+                </div>
+
+                <div
+                    class="candidate-profile-progress"
+                    role="progressbar"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="<?php echo esc_attr(
+                        $company_profile_completeness
+                    ); ?>"
+                    aria-label="<?php esc_attr_e(
+                        'Company profile completeness',
+                        'devhire'
+                    ); ?>"
+                >
+                    <span
+                        style="width: <?php echo esc_attr(
+                            $company_profile_completeness
+                        ); ?>%;"
+                    ></span>
+                </div>
+
+                <?php if (
+                    $company_profile_is_complete
+                ) : ?>
+
+                    <p class="complete">
+                        Your company profile is complete.
+                    </p>
+
+                <?php elseif ($company_id) : ?>
+
+                    <p>
+                        Missing:
+                        <?php
+                        echo esc_html(
+                            implode(
+                                ', ',
+                                $missing_company_fields
+                            )
+                        );
+                        ?>
+                    </p>
+
+                <?php else : ?>
+
+                    <p>
+                        Add your company information and logo
+                        to complete your employer profile.
+                    </p>
+
+                <?php endif; ?>
+
+                <div class="employer-account-actions">
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url(
+                            home_url(
+                                '/employer-company-profile/'
+                            )
+                        ); ?>"
+                    >
+                        <?php
+                        echo $company_id
+                            ? 'Edit Company Profile'
+                            : 'Create Company Profile';
+                        ?>
+                    </a>
+
+                    <?php if ($company_id) : ?>
+
+                        <a
+                            class="primary-button"
+                            href="<?php echo esc_url(
+                                home_url(
+                                    '/employer-post-job/'
+                                )
+                            ); ?>"
+                        >
+                            Post Job
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+        </section>
         
         <?php if (
             isset($_GET['job_created']) &&
@@ -4868,6 +5183,45 @@ function devhire_employer_company_profile_shortcode() {
         )
         : '';
 
+    $company_logo_id = $company_id
+        ? get_post_thumbnail_id($company_id)
+        : 0;
+
+    $company_profile_fields = [
+        'Company Name' => $company_name,
+        'Website'      => $website,
+        'Location'     => $location,
+        'Industry'     => $industry,
+        'Company Size' => $size,
+        'Description'  => trim(
+            wp_strip_all_tags($description)
+        ),
+        'Company Logo' => $company_logo_id,
+    ];
+
+    $completed_company_fields = 0;
+    $missing_company_fields   = [];
+
+    foreach (
+        $company_profile_fields as $label => $value
+    ) {
+        if (!empty($value)) {
+            $completed_company_fields++;
+        } else {
+            $missing_company_fields[] = $label;
+        }
+    }
+
+    $company_profile_completeness = (int) round(
+        (
+            $completed_company_fields /
+            count($company_profile_fields)
+        ) * 100
+    );
+
+    $company_profile_is_complete =
+        $company_profile_completeness === 100;
+
     $error = isset($_GET['company_error'])
         ? sanitize_key(wp_unslash($_GET['company_error']))
         : '';
@@ -4942,6 +5296,120 @@ function devhire_employer_company_profile_shortcode() {
             </a>
 
         </nav>
+
+        <section class="employer-profile-guidance">
+
+            <div class="employer-profile-guidance-header">
+
+                <div>
+                    <span class="application-job-label">
+                        Company Profile Strength
+                    </span>
+
+                    <h2>
+                        Build candidate trust
+                    </h2>
+                </div>
+
+                <strong class="employer-profile-percentage">
+                    <?php
+                    echo esc_html(
+                        $company_profile_completeness
+                    );
+                    ?>%
+                </strong>
+
+            </div>
+
+            <div
+                class="candidate-profile-progress"
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="<?php echo esc_attr(
+                    $company_profile_completeness
+                ); ?>"
+                aria-label="<?php esc_attr_e(
+                    'Company profile completeness',
+                    'devhire'
+                ); ?>"
+            >
+                <span
+                    style="width: <?php echo esc_attr(
+                        $company_profile_completeness
+                    ); ?>%;"
+                ></span>
+            </div>
+
+            <?php if ($company_profile_is_complete) : ?>
+
+                <p class="employer-profile-guidance-message complete">
+                    Your company profile is complete and ready
+                    for candidates to view.
+                </p>
+
+            <?php else : ?>
+
+                <p class="employer-profile-guidance-message">
+                    Complete the remaining details so candidates
+                    get a stronger picture of your company.
+                </p>
+
+                <div
+                    class="employer-missing-fields"
+                    aria-label="<?php esc_attr_e(
+                        'Missing company profile fields',
+                        'devhire'
+                    ); ?>"
+                >
+                    <?php foreach (
+                        $missing_company_fields as $missing_field
+                    ) : ?>
+
+                        <span>
+                            <?php echo esc_html($missing_field); ?>
+                        </span>
+
+                    <?php endforeach; ?>
+                </div>
+
+            <?php endif; ?>
+
+            <div class="employer-logo-status">
+
+                <span>
+                    Company Logo
+                </span>
+
+                <strong>
+                    <?php echo $company_logo_id
+                        ? 'Uploaded'
+                        : 'Missing'; ?>
+                </strong>
+
+                <?php if ($company_logo_id) : ?>
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url(
+                            wp_get_attachment_url(
+                                $company_logo_id
+                            )
+                        ); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        View Logo
+                    </a>
+
+                <?php endif; ?>
+
+            </div>
+
+        </section>
+
+
+
 
         <?php if (
             isset($_GET['company_updated']) &&
