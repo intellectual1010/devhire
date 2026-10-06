@@ -1,0 +1,565 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+
+/**
+ * Candidate Profile Shortcode
+ */
+function devhire_candidate_profile_shortcode() {
+
+    if (!is_user_logged_in()) {
+
+        return sprintf(
+            '<div class="candidate-login-required">
+                <h2>Candidate Profile</h2>
+                <p>Please sign in to manage your profile.</p>
+                <a class="primary-button" href="%s">
+                    Sign In
+                </a>
+            </div>',
+            esc_url(home_url('/candidate-login/'))
+        );
+    }
+
+
+    $user_id = get_current_user_id();
+    $user    = wp_get_current_user();
+
+    $message = '';
+
+
+    /**
+     * Save profile.
+     */
+    if (
+        isset($_POST['devhire_profile_nonce']) &&
+        wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_profile_nonce'])
+            ),
+            'devhire_save_candidate_profile'
+        )
+    ) {
+
+        $full_name = isset($_POST['full_name'])
+            ? sanitize_text_field(
+                wp_unslash($_POST['full_name'])
+            )
+            : '';
+
+        $phone = isset($_POST['phone'])
+            ? sanitize_text_field(
+                wp_unslash($_POST['phone'])
+            )
+            : '';
+
+        $linkedin = isset($_POST['linkedin'])
+            ? esc_url_raw(
+                wp_unslash($_POST['linkedin'])
+            )
+            : '';
+
+        $location = isset($_POST['location'])
+            ? sanitize_text_field(
+                wp_unslash($_POST['location'])
+            )
+            : '';
+
+        $professional_title =
+            isset($_POST['professional_title'])
+                ? sanitize_text_field(
+                    wp_unslash(
+                        $_POST['professional_title']
+                    )
+                )
+                : '';
+
+        $bio = isset($_POST['bio'])
+            ? sanitize_textarea_field(
+                wp_unslash($_POST['bio'])
+            )
+            : '';
+
+
+        /**
+         * Update WordPress user.
+         */
+        wp_update_user([
+            'ID'           => $user_id,
+            'display_name' => $full_name,
+            'first_name'   => $full_name,
+        ]);
+
+
+        /**
+         * Save candidate profile fields.
+         */
+        update_user_meta(
+            $user_id,
+            '_devhire_phone',
+            $phone
+        );
+
+        update_user_meta(
+            $user_id,
+            '_devhire_linkedin',
+            $linkedin
+        );
+
+        update_user_meta(
+            $user_id,
+            '_devhire_location',
+            $location
+        );
+
+        update_user_meta(
+            $user_id,
+            '_devhire_professional_title',
+            $professional_title
+        );
+
+        update_user_meta(
+            $user_id,
+            '_devhire_bio',
+            $bio
+        );
+
+        /**
+         * Resume upload.
+         */
+        if (
+            !empty($_FILES['resume']['name']) &&
+            isset($_FILES['resume']['tmp_name'])
+        ) {
+
+            $file = $_FILES['resume'];
+
+            $allowed_types = [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ];
+
+            $max_size = 5 * 1024 * 1024;
+
+
+            if ($file['size'] > $max_size) {
+
+                $message =
+                    '<div class="devhire-notice error">
+                        Resume must be smaller than 5MB.
+                    </div>';
+
+            } else {
+
+                $file_check = wp_check_filetype_and_ext(
+                    $file['tmp_name'],
+                    $file['name']
+                );
+
+                if (
+                    empty($file_check['type']) ||
+                    !in_array(
+                        $file_check['type'],
+                        $allowed_types,
+                        true
+                    )
+                ) {
+
+                    $message =
+                        '<div class="devhire-notice error">
+                            Resume must be a PDF, DOC, or DOCX file.
+                        </div>';
+
+                } else {
+
+                    require_once ABSPATH .
+                        'wp-admin/includes/file.php';
+
+                    require_once ABSPATH .
+                        'wp-admin/includes/media.php';
+
+                    require_once ABSPATH .
+                        'wp-admin/includes/image.php';
+
+
+                    $attachment_id = media_handle_upload(
+                        'resume',
+                        0
+                    );
+
+
+                    if (is_wp_error($attachment_id)) {
+
+                        $message =
+                            '<div class="devhire-notice error">
+                                Resume upload failed.
+                            </div>';
+
+                    } else {
+
+                        $old_resume_id = absint(
+                            get_user_meta(
+                                $user_id,
+                                '_devhire_resume_id',
+                                true
+                            )
+                        );
+
+
+                        update_user_meta(
+                            $user_id,
+                            '_devhire_resume_id',
+                            $attachment_id
+                        );
+
+
+                        /*
+                        * Remove old resume after successful replacement.
+                        */
+                        if (
+                            $old_resume_id &&
+                            $old_resume_id !== $attachment_id
+                        ) {
+                            wp_delete_attachment(
+                                $old_resume_id,
+                                true
+                            );
+                        }
+
+
+                        $message =
+                            '<div class="devhire-notice success">
+                                Profile and resume updated successfully.
+                            </div>';
+                    }
+                }
+            }
+
+        } // <-- closes the resume upload if
+
+
+        /*
+        * Only show the normal success message
+        * when no resume-specific message was set.
+        */
+        if (!$message) {
+
+            $message =
+                '<div class="devhire-notice success">
+                    Profile updated successfully.
+                </div>';
+        }
+
+
+        /*
+        * Refresh user object after update.
+        */
+        $user = wp_get_current_user();
+    }
+
+
+    /**
+     * Current values.
+     */
+    $full_name =
+        $user->display_name;
+
+    $phone = get_user_meta(
+        $user_id,
+        '_devhire_phone',
+        true
+    );
+
+    $linkedin = get_user_meta(
+        $user_id,
+        '_devhire_linkedin',
+        true
+    );
+
+    $location = get_user_meta(
+        $user_id,
+        '_devhire_location',
+        true
+    );
+
+    $professional_title = get_user_meta(
+        $user_id,
+        '_devhire_professional_title',
+        true
+    );
+
+    $bio = get_user_meta(
+        $user_id,
+        '_devhire_bio',
+        true
+    );
+
+    $resume_id = absint(
+        get_user_meta(
+            $user_id,
+            '_devhire_resume_id',
+            true
+        )
+    );
+
+    $resume_url = $resume_id
+        ? wp_get_attachment_url($resume_id)
+        : '';
+
+    $resume_name = $resume_id
+        ? basename(get_attached_file($resume_id))
+        : '';
+
+    ob_start();
+
+    echo wp_kses_post($message);
+    ?>
+
+    <div class="candidate-profile">
+
+        <div class="profile-header">
+
+            <div>
+
+                <span class="hero-badge">
+                    Candidate Portal
+                </span>
+
+                <h1>
+                    My Profile
+                </h1>
+
+                <p>
+                    Keep your professional information
+                    up to date.
+                </p>
+
+            </div>
+
+            <a
+                class="secondary-button"
+                href="<?php echo esc_url(
+                    home_url('/candidate-dashboard/')
+                ); ?>"
+            >
+                Back to Dashboard
+            </a>
+
+        </div>
+
+
+        <form
+            method="post"
+            enctype="multipart/form-data"
+            class="candidate-profile-form"
+        >
+
+            <?php
+            wp_nonce_field(
+                'devhire_save_candidate_profile',
+                'devhire_profile_nonce'
+            );
+            ?>
+
+
+            <div class="form-field">
+
+                <label for="profile-name">
+                    Full Name
+                </label>
+
+                <input
+                    id="profile-name"
+                    name="full_name"
+                    type="text"
+                    value="<?php
+                    echo esc_attr($full_name);
+                    ?>"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="profile-email">
+                    Email
+                </label>
+
+                <input
+                    id="profile-email"
+                    type="email"
+                    value="<?php
+                    echo esc_attr($user->user_email);
+                    ?>"
+                    disabled
+                >
+
+                <small>
+                    Your account email cannot be changed here.
+                </small>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="profile-title">
+                    Professional Title
+                </label>
+
+                <input
+                    id="profile-title"
+                    name="professional_title"
+                    type="text"
+                    placeholder="e.g. Full Stack Developer"
+                    value="<?php
+                    echo esc_attr(
+                        $professional_title
+                    );
+                    ?>"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="profile-phone">
+                    Phone
+                </label>
+
+                <input
+                    id="profile-phone"
+                    name="phone"
+                    type="text"
+                    value="<?php
+                    echo esc_attr($phone);
+                    ?>"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="profile-location">
+                    Location
+                </label>
+
+                <input
+                    id="profile-location"
+                    name="location"
+                    type="text"
+                    placeholder="e.g. Philippines"
+                    value="<?php
+                    echo esc_attr($location);
+                    ?>"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="profile-linkedin">
+                    LinkedIn
+                </label>
+
+                <input
+                    id="profile-linkedin"
+                    name="linkedin"
+                    type="url"
+                    placeholder="https://linkedin.com/in/..."
+                    value="<?php
+                    echo esc_attr($linkedin);
+                    ?>"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="profile-bio">
+                    Professional Bio
+                </label>
+
+                <textarea
+                    id="profile-bio"
+                    name="bio"
+                    rows="6"
+                    placeholder="Tell employers about your experience..."
+                ><?php
+                    echo esc_textarea($bio);
+                ?></textarea>
+
+            </div>
+
+            <div class="form-field">
+
+                <label for="profile-resume">
+                    Resume
+                </label>
+
+                <?php if ($resume_url) : ?>
+
+                    <div class="current-resume">
+
+                        <span>
+                            Current Resume:
+                        </span>
+
+                        <a
+                            href="<?php echo esc_url($resume_url); ?>"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            <?php echo esc_html($resume_name); ?>
+                        </a>
+
+                    </div>
+
+                <?php endif; ?>
+
+
+                <input
+                    id="profile-resume"
+                    name="resume"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                >
+
+                <small>
+                    PDF, DOC or DOCX. Maximum 5MB.
+                    Uploading a new resume replaces the existing one.
+                </small>
+
+            </div>
+
+            <button
+                type="submit"
+                class="primary-button"
+            >
+                Save Profile
+            </button>
+
+        </form>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_candidate_profile',
+    'devhire_candidate_profile_shortcode'
+);

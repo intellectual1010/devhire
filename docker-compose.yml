@@ -29,6 +29,7 @@ services:
       - wordpress_data:/var/www/html
       - ./wordpress/wp-content/themes/devhire:/var/www/html/wp-content/themes/devhire
       - ./wordpress/wp-content/plugins/devhire-core:/var/www/html/wp-content/plugins/devhire-core
+      - ./php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
 
 volumes:
   devhire_db:

@@ -18,6 +18,50 @@ function devhire_application_form_shortcode() {
 
     $job_id = get_the_ID();
 
+    $name     = '';
+    $email    = '';
+    $phone    = '';
+    $linkedin = '';
+    $resume_id = 0;
+    $resume_url = '';
+    $resume_name = '';
+
+    if (is_user_logged_in()) {
+
+        $current_user = wp_get_current_user();
+        $user_id      = $current_user->ID;
+
+        $name  = $current_user->display_name;
+        $email = $current_user->user_email;
+
+        $phone = get_user_meta(
+            $user_id,
+            '_devhire_phone',
+            true
+        );
+
+        $linkedin = get_user_meta(
+            $user_id,
+            '_devhire_linkedin',
+            true
+        );
+
+        $resume_id = absint(
+            get_user_meta(
+                $user_id,
+                '_devhire_resume_id',
+                true
+            )
+        );
+
+        if ($resume_id) {
+            $resume_url  = wp_get_attachment_url($resume_id);
+            $resume_name = basename(
+                get_attached_file($resume_id)
+            );
+        }
+    }
+
     ob_start();
     ?>
 
@@ -109,12 +153,10 @@ function devhire_application_form_shortcode() {
                     </label>
 
                     <input
-                        id="applicant_name"
-                        name="applicant_name"
                         type="text"
+                        name="name"
+                        value="<?php echo esc_attr($name); ?>"
                         required
-                        maxlength="100"
-                        autocomplete="name"
                     >
 
                 </div>
@@ -127,12 +169,10 @@ function devhire_application_form_shortcode() {
                     </label>
 
                     <input
-                        id="applicant_email"
-                        name="applicant_email"
                         type="email"
+                        name="email"
+                        value="<?php echo esc_attr($email); ?>"
                         required
-                        maxlength="190"
-                        autocomplete="email"
                     >
 
                 </div>
@@ -145,11 +185,9 @@ function devhire_application_form_shortcode() {
                     </label>
 
                     <input
-                        id="applicant_phone"
-                        name="applicant_phone"
-                        type="tel"
-                        maxlength="50"
-                        autocomplete="tel"
+                        type="text"
+                        name="phone"
+                        value="<?php echo esc_attr($phone); ?>"
                     >
 
                 </div>
@@ -162,10 +200,9 @@ function devhire_application_form_shortcode() {
                     </label>
 
                     <input
-                        id="applicant_linkedin"
-                        name="applicant_linkedin"
                         type="url"
-                        placeholder="https://..."
+                        name="linkedin"
+                        value="<?php echo esc_attr($linkedin); ?>"
                     >
 
                 </div>
@@ -188,6 +225,34 @@ function devhire_application_form_shortcode() {
 
                 </div>
 
+                <?php if ($resume_url) : ?>
+
+                    <div class="candidate-profile-resume">
+
+                        <p>
+                            Profile Resume:
+                            <a
+                                href="<?php echo esc_url($resume_url); ?>"
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                <?php echo esc_html($resume_name); ?>
+                            </a>
+                        </p>
+
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="use_profile_resume"
+                                value="1"
+                                checked
+                            >
+                            Use my profile resume
+                        </label>
+
+                    </div>
+
+                <?php endif; ?>
 
                 <div class="application-field application-full">
 
@@ -200,7 +265,6 @@ function devhire_application_form_shortcode() {
                         name="applicant_resume"
                         type="file"
                         accept=".pdf,.doc,.docx"
-                        required
                     >
 
                     <small>
@@ -329,27 +393,27 @@ function devhire_handle_application_submission() {
     /*
      * Sanitize fields.
      */
-    $name = isset($_POST['applicant_name'])
+    $name = isset($_POST['name'])
         ? sanitize_text_field(
-            wp_unslash($_POST['applicant_name'])
+            wp_unslash($_POST['name'])
         )
         : '';
 
-    $email = isset($_POST['applicant_email'])
+    $email = isset($_POST['email'])
         ? sanitize_email(
-            wp_unslash($_POST['applicant_email'])
+            wp_unslash($_POST['email'])
         )
         : '';
 
-    $phone = isset($_POST['applicant_phone'])
+    $phone = isset($_POST['phone'])
         ? sanitize_text_field(
-            wp_unslash($_POST['applicant_phone'])
+            wp_unslash($_POST['phone'])
         )
         : '';
 
-    $linkedin = isset($_POST['applicant_linkedin'])
+    $linkedin = isset($_POST['linkedin'])
         ? esc_url_raw(
-            wp_unslash($_POST['applicant_linkedin'])
+            wp_unslash($_POST['linkedin'])
         )
         : '';
 
@@ -382,110 +446,169 @@ function devhire_handle_application_submission() {
 
 
     /*
-     * Validate resume.
-     */
+    * Resolve application resume.
+    */
+    $resume_url = '';
+
+    $use_profile_resume =
+        isset($_POST['use_profile_resume']) &&
+        sanitize_text_field(
+            wp_unslash($_POST['use_profile_resume'])
+        ) === '1';
+
+
+    /*
+    * Use the logged-in candidate's profile resume.
+    */
     if (
-        empty($_FILES['applicant_resume']) ||
-        !isset(
+        $use_profile_resume &&
+        is_user_logged_in()
+    ) {
+
+        $profile_resume_id = absint(
+            get_user_meta(
+                get_current_user_id(),
+                '_devhire_resume_id',
+                true
+            )
+        );
+
+        if ($profile_resume_id) {
+
+            $profile_resume_url =
+                wp_get_attachment_url(
+                    $profile_resume_id
+                );
+
+            if ($profile_resume_url) {
+                $resume_url =
+                    $profile_resume_url;
+            }
+        }
+    }
+
+
+    /*
+    * If no profile resume was selected,
+    * process a newly uploaded resume.
+    */
+    if (!$resume_url) {
+
+        if (
+            empty($_FILES['applicant_resume']) ||
+            !isset(
+                $_FILES['applicant_resume']['error']
+            ) ||
             $_FILES['applicant_resume']['error']
-        ) ||
-        $_FILES['applicant_resume']['error'] !== UPLOAD_ERR_OK
-    ) {
-        wp_safe_redirect(
-            add_query_arg(
-                'application',
-                'error',
-                $job_url
-            )
-        );
+                !== UPLOAD_ERR_OK
+        ) {
 
-        exit;
-    }
+            wp_safe_redirect(
+                add_query_arg(
+                    'application',
+                    'error',
+                    $job_url
+                )
+            );
 
-
-    $resume = $_FILES['applicant_resume'];
+            exit;
+        }
 
 
-    /*
-     * Maximum 5 MB.
-     */
-    if ($resume['size'] > 5 * 1024 * 1024) {
-
-        wp_safe_redirect(
-            add_query_arg(
-                'application',
-                'error',
-                $job_url
-            )
-        );
-
-        exit;
-    }
+        $resume =
+            $_FILES['applicant_resume'];
 
 
-    /*
-     * WordPress file type validation.
-     */
-    $allowed_mimes = [
-        'pdf'  => 'application/pdf',
-        'doc'  => 'application/msword',
-        'docx' =>
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
+        /*
+        * Maximum 5 MB.
+        */
+        if (
+            $resume['size'] >
+            5 * 1024 * 1024
+        ) {
+
+            wp_safe_redirect(
+                add_query_arg(
+                    'application',
+                    'error',
+                    $job_url
+                )
+            );
+
+            exit;
+        }
 
 
-    $file_check = wp_check_filetype_and_ext(
-        $resume['tmp_name'],
-        $resume['name'],
-        $allowed_mimes
-    );
+        $allowed_mimes = [
+            'pdf' =>
+                'application/pdf',
+
+            'doc' =>
+                'application/msword',
+
+            'docx' =>
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ];
 
 
-    if (
-        empty($file_check['ext']) ||
-        empty($file_check['type'])
-    ) {
-        wp_safe_redirect(
-            add_query_arg(
-                'application',
-                'error',
-                $job_url
-            )
-        );
-
-        exit;
-    }
+        $file_check =
+            wp_check_filetype_and_ext(
+                $resume['tmp_name'],
+                $resume['name'],
+                $allowed_mimes
+            );
 
 
-    /*
-     * Load WordPress upload functions.
-     */
-    require_once ABSPATH .
-        'wp-admin/includes/file.php';
+        if (
+            empty($file_check['ext']) ||
+            empty($file_check['type'])
+        ) {
+
+            wp_safe_redirect(
+                add_query_arg(
+                    'application',
+                    'error',
+                    $job_url
+                )
+            );
+
+            exit;
+        }
 
 
-    $uploaded_file = wp_handle_upload(
-        $resume,
-        [
-            'test_form' => false,
-            'mimes'     => $allowed_mimes,
-        ]
-    );
+        require_once ABSPATH .
+            'wp-admin/includes/file.php';
 
 
-    if (
-        isset($uploaded_file['error']) ||
-        empty($uploaded_file['url'])
-    ) {
-        wp_safe_redirect(
-            add_query_arg(
-                'application',
-                'error',
-                $job_url
-            )
-        );
+        $uploaded_file =
+            wp_handle_upload(
+                $resume,
+                [
+                    'test_form' => false,
+                    'mimes'     => $allowed_mimes,
+                ]
+            );
 
-        exit;
+
+        if (
+            isset($uploaded_file['error']) ||
+            empty($uploaded_file['url'])
+        ) {
+
+            wp_safe_redirect(
+                add_query_arg(
+                    'application',
+                    'error',
+                    $job_url
+                )
+            );
+
+            exit;
+        }
+
+
+        $resume_url =
+            $uploaded_file['url'];
     }
 
 
@@ -538,6 +661,16 @@ function devhire_handle_application_submission() {
         $email
     );
 
+    if (is_user_logged_in()) {
+
+        update_post_meta(
+            $application_id,
+            '_devhire_candidate_user',
+            get_current_user_id()
+        );
+
+    }
+
     update_post_meta(
         $application_id,
         '_devhire_applicant_phone',
@@ -559,7 +692,7 @@ function devhire_handle_application_submission() {
     update_post_meta(
         $application_id,
         '_devhire_applicant_resume',
-        esc_url_raw($uploaded_file['url'])
+        esc_url_raw($resume_url)
     );
 
     update_post_meta(

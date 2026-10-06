@@ -86,6 +86,7 @@ $jobs = new WP_Query($args);
     <div class="container">
 
         <form
+            id="devhire-job-filter"
             class="job-filters"
             method="get"
             action="<?php echo esc_url(get_post_type_archive_link('job')); ?>"
@@ -178,8 +179,8 @@ $jobs = new WP_Query($args);
         <div class="jobs-toolbar">
 
             <div>
-                <strong>
-                    <?php echo esc_html($jobs->found_posts); ?>
+                <strong id="devhire-job-count">
+                    <?php echo esc_html(number_format_i18n($jobs->found_posts)); ?>
                 </strong>
 
                 <?php
@@ -196,7 +197,7 @@ $jobs = new WP_Query($args);
 
         </div>
 
-
+        <div id="devhire-job-results">
         <?php if ($jobs->have_posts()) : ?>
 
             <div class="job-list">
@@ -392,6 +393,7 @@ $jobs = new WP_Query($args);
             </div>
 
         <?php endif; ?>
+        </div>
 
         <?php wp_reset_postdata(); ?>
 

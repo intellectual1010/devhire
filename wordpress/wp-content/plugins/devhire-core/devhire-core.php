@@ -37,6 +37,9 @@ require_once DEVHIRE_CORE_PATH . 'includes/company-meta.php';
 require_once DEVHIRE_CORE_PATH . 'includes/applications.php';
 require_once DEVHIRE_CORE_PATH . 'includes/saved-jobs.php';
 require_once DEVHIRE_CORE_PATH . 'includes/rest-api.php';
+require_once DEVHIRE_CORE_PATH . 'includes/job-search.php';
+require_once DEVHIRE_CORE_PATH . 'includes/candidates.php';
+require_once DEVHIRE_CORE_PATH . 'includes/candidate-profile.php';
 
 
 /**
