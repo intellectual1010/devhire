@@ -654,7 +654,65 @@ function devhire_employer_dashboard_shortcode() {
             </a>
 
         </nav>
+        
+        <?php if (
+            isset($_GET['job_created']) &&
+            $_GET['job_created'] === '1'
+        ) : ?>
 
+            <div class="devhire-notice success">
+                Job created successfully. It has been saved as a draft.
+            </div>
+
+        <?php endif; ?>
+
+
+        <?php if (
+            isset($_GET['job_updated']) &&
+            $_GET['job_updated'] === '1'
+        ) : ?>
+
+            <div class="devhire-notice success">
+                Job updated successfully.
+            </div>
+
+        <?php endif; ?>
+
+
+        <?php if (
+            isset($_GET['job_status_updated']) &&
+            $_GET['job_status_updated'] === '1'
+        ) : ?>
+
+            <div class="devhire-notice success">
+                Job status updated successfully.
+            </div>
+
+        <?php endif; ?>
+
+
+        <?php if (
+            isset($_GET['job_deleted']) &&
+            $_GET['job_deleted'] === '1'
+        ) : ?>
+
+            <div class="devhire-notice success">
+                Job moved to Trash successfully.
+            </div>
+
+        <?php endif; ?>
+
+
+        <?php if (
+            isset($_GET['job_delete_error']) &&
+            $_GET['job_delete_error'] === '1'
+        ) : ?>
+
+            <div class="devhire-notice error">
+                Unable to delete the job. Please try again.
+            </div>
+
+        <?php endif; ?>
 
         <div class="dashboard-stats">
 
@@ -713,7 +771,68 @@ function devhire_employer_dashboard_shortcode() {
 
                         $job_id = get_the_ID();
 
+                        $job_applications = new WP_Query([
+                            'post_type'      => 'job_application',
+                            'post_status'    => 'private',
+                            'posts_per_page' => -1,
+                            'fields'         => 'ids',
+                            'meta_query'     => [
+                                [
+                                    'key'     => '_devhire_application_job',
+                                    'value'   => $job_id,
+                                    'compare' => '=',
+                                    'type'    => 'NUMERIC',
+                                ],
+                            ],
+                        ]);
+
+                        $job_application_count = $job_applications->found_posts;
+
+                        $job_reviewing_count = 0;
+                        $job_interview_count = 0;
+                        $job_hired_count = 0;
+
+                        foreach ($job_applications->posts as $application_id) {
+
+                            $application_status = get_post_meta(
+                                $application_id,
+                                '_devhire_application_status',
+                                true
+                            );
+
+                            switch ($application_status) {
+                                case 'Reviewing':
+                                    $job_reviewing_count++;
+                                    break;
+
+                                case 'Interview':
+                                    $job_interview_count++;
+                                    break;
+
+                                case 'Hired':
+                                    $job_hired_count++;
+                                    break;
+                            }
+                        }
+
                         $status = get_post_status($job_id);
+
+                        switch ($status) {
+                            case 'publish':
+                                $status_label = 'Published';
+                                $status_class = 'published';
+                                break;
+
+                            case 'pending':
+                                $status_label = 'Pending Review';
+                                $status_class = 'pending';
+                                break;
+
+                            default:
+                                $status_label = 'Draft';
+                                $status_class = 'draft';
+                                break;
+                        }
 
                         $application_count = new WP_Query([
                             'post_type'      => 'job_application',
@@ -735,12 +854,8 @@ function devhire_employer_dashboard_shortcode() {
 
                             <div>
 
-                                <span class="application-job-label">
-                                    <?php
-                                    echo esc_html(
-                                        ucfirst($status)
-                                    );
-                                    ?>
+                                <span class="employer-job-status <?php echo esc_attr($status_class); ?>">
+                                    <?php echo esc_html($status_label); ?>
                                 </span>
 
                                 <h3>
@@ -758,6 +873,67 @@ function devhire_employer_dashboard_shortcode() {
 
                             </div>
 
+                            <div class="employer-job-stats">
+
+                                <a href="<?php echo esc_url(
+                                    add_query_arg(
+                                        'job_id',
+                                        $job_id,
+                                        home_url('/employer-applicants/')
+                                    )
+                                ); ?>">
+                                    <strong>
+                                        <?php echo esc_html($job_application_count); ?>
+                                    </strong>
+                                    Applicants
+                                </a>
+
+                                <a href="<?php echo esc_url(
+                                    add_query_arg(
+                                        [
+                                            'job_id' => $job_id,
+                                            'status' => 'reviewing',
+                                        ],
+                                        home_url('/employer-applicants/')
+                                    )
+                                ); ?>">
+                                    <strong>
+                                        <?php echo esc_html($job_reviewing_count); ?>
+                                    </strong>
+                                    Reviewing
+                                </a>
+
+                                <a href="<?php echo esc_url(
+                                    add_query_arg(
+                                        [
+                                            'job_id' => $job_id,
+                                            'status' => 'interview',
+                                        ],
+                                        home_url('/employer-applicants/')
+                                    )
+                                ); ?>">
+                                    <strong>
+                                        <?php echo esc_html($job_interview_count); ?>
+                                    </strong>
+                                    Interviews
+                                </a>
+
+                                <a href="<?php echo esc_url(
+                                    add_query_arg(
+                                        [
+                                            'job_id' => $job_id,
+                                            'status' => 'hired',
+                                        ],
+                                        home_url('/employer-applicants/')
+                                    )
+                                ); ?>">
+                                    <strong>
+                                        <?php echo esc_html($job_hired_count); ?>
+                                    </strong>
+                                    Hired
+                                </a>
+
+                            </div>
 
                             <div class="application-card-actions">
                                 <a
@@ -841,6 +1017,39 @@ function devhire_employer_dashboard_shortcode() {
                                         ?>
                                     </button>
 
+                                </form>
+
+                                <form
+                                    method="post"
+                                    action="<?php echo esc_url(admin_url('admin-post.php')); ?>"
+                                    class="job-delete-form"
+                                    onsubmit="return confirm('Are you sure you want to delete this job?');"
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="action"
+                                        value="devhire_employer_delete_job"
+                                    >
+
+                                    <input
+                                        type="hidden"
+                                        name="job_id"
+                                        value="<?php echo esc_attr($job_id); ?>"
+                                    >
+
+                                    <?php
+                                    wp_nonce_field(
+                                        'devhire_delete_job_' . $job_id,
+                                        'devhire_delete_job_nonce'
+                                    );
+                                    ?>
+
+                                    <button
+                                        type="submit"
+                                        class="secondary-button delete-job-button"
+                                    >
+                                        Delete
+                                    </button>
                                 </form>
 
                             </div>
@@ -2262,6 +2471,27 @@ function devhire_employer_applicants_shortcode() {
 
     $user = wp_get_current_user();
 
+    $allowed_filters = [
+        'all',
+        'new',
+        'reviewing',
+        'interview',
+        'hired',
+        'rejected',
+    ];
+
+    $current_filter = isset($_GET['status'])
+        ? sanitize_key(wp_unslash($_GET['status']))
+        : 'all';
+
+    if (!in_array($current_filter, $allowed_filters, true)) {
+        $current_filter = 'all';
+    }
+
+    $current_job = isset($_GET['job_id'])
+        ? absint($_GET['job_id'])
+        : 0;
+
     if (!in_array('employer', (array) $user->roles, true)) {
         return '<div class="devhire-notice error">
             Only employer accounts can view applicants.
@@ -2278,6 +2508,13 @@ function devhire_employer_applicants_shortcode() {
         'posts_per_page' => -1,
         'fields'         => 'ids',
     ]);
+
+    if (
+        $current_job &&
+        !in_array($current_job, array_map('intval', $job_ids), true)
+    ) {
+        $current_job = 0;
+    }
 
     /*
      * Get applications belonging only to those jobs.
@@ -2302,6 +2539,49 @@ function devhire_employer_applicants_shortcode() {
                 ],
             ],
         ]);
+    }
+
+    $total_applicants = 0;
+    $new_applicants = 0;
+    $reviewing_applicants = 0;
+    $interview_applicants = 0;
+    $hired_applicants = 0;
+
+    if ($applications && $applications->have_posts()) {
+
+        foreach ($applications->posts as $application) {
+
+            $total_applicants++;
+
+            $application_status = get_post_meta(
+                $application->ID,
+                '_devhire_application_status',
+                true
+            );
+
+            if (!$application_status) {
+                $application_status = 'New';
+            }
+
+            switch ($application_status) {
+
+                case 'New':
+                    $new_applicants++;
+                    break;
+
+                case 'Reviewing':
+                    $reviewing_applicants++;
+                    break;
+
+                case 'Interview':
+                    $interview_applicants++;
+                    break;
+
+                case 'Hired':
+                    $hired_applicants++;
+                    break;
+            }
+        }
     }
 
     ob_start();
@@ -2370,6 +2650,44 @@ function devhire_employer_applicants_shortcode() {
 
         </nav>
 
+        <div class="dashboard-stats">
+
+            <div class="dashboard-stat">
+                <span>Total Applicants</span>
+                <strong>
+                    <?php echo esc_html($total_applicants); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>New</span>
+                <strong>
+                    <?php echo esc_html($new_applicants); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Reviewing</span>
+                <strong>
+                    <?php echo esc_html($reviewing_applicants); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Interviews</span>
+                <strong>
+                    <?php echo esc_html($interview_applicants); ?>
+                </strong>
+            </div>
+
+            <div class="dashboard-stat">
+                <span>Hired</span>
+                <strong>
+                    <?php echo esc_html($hired_applicants); ?>
+                </strong>
+            </div>
+
+        </div>
 
         <?php
         if (
@@ -2377,10 +2695,107 @@ function devhire_employer_applicants_shortcode() {
             $applications->have_posts()
         ) :
         ?>
+            <form
+                method="get"
+                action="<?php echo esc_url(
+                    home_url('/employer-applicants/')
+                ); ?>"
+                class="applicant-job-filter"
+            >
 
+                <?php if ($current_filter !== 'all') : ?>
+                    <input
+                        type="hidden"
+                        name="status"
+                        value="<?php echo esc_attr($current_filter); ?>"
+                    >
+                <?php endif; ?>
+
+                <label for="applicant-job-filter">
+                    Job
+                </label>
+
+                <select
+                    id="applicant-job-filter"
+                    name="job_id"
+                    onchange="this.form.submit()"
+                >
+                    <option value="0">
+                        All Jobs
+                    </option>
+
+                    <?php foreach ($job_ids as $employer_job_id) : ?>
+
+                        <option
+                            value="<?php echo esc_attr($employer_job_id); ?>"
+                            <?php selected(
+                                $current_job,
+                                $employer_job_id
+                            ); ?>
+                        >
+                            <?php echo esc_html(
+                                get_the_title($employer_job_id)
+                            ); ?>
+                        </option>
+
+                    <?php endforeach; ?>
+
+                </select>
+
+            </form>
+
+            <div class="applicant-filters">
+
+                <?php
+                $filters = [
+                    'all'       => 'All',
+                    'new'       => 'New',
+                    'reviewing' => 'Reviewing',
+                    'interview' => 'Interview',
+                    'hired'     => 'Hired',
+                    'rejected'  => 'Rejected',
+                ];
+
+                foreach ($filters as $filter_key => $filter_label) :
+
+                    $filter_args = [];
+
+                    if ($filter_key !== 'all') {
+                        $filter_args['status'] = $filter_key;
+                    }
+
+                    if ($current_job) {
+                        $filter_args['job_id'] = $current_job;
+                    }
+
+                    $filter_url = $filter_args
+                        ? add_query_arg(
+                            $filter_args,
+                            home_url('/employer-applicants/')
+                        )
+                        : home_url('/employer-applicants/');
+                    ?>
+
+                    <a
+                        class="applicant-filter <?php
+                        echo $current_filter === $filter_key
+                            ? 'active'
+                            : '';
+                        ?>"
+                        href="<?php echo esc_url($filter_url); ?>"
+                    >
+                        <?php echo esc_html($filter_label); ?>
+                    </a>
+
+                <?php endforeach; ?>
+
+            </div>
+            
             <div class="application-list">
 
                 <?php
+                $visible_applicants = 0;
+
                 while ($applications->have_posts()) :
                     $applications->the_post();
 
@@ -2413,6 +2828,22 @@ function devhire_employer_applicants_shortcode() {
                     if (!$status) {
                         $status = 'New';
                     }
+
+                    if (
+                        $current_job &&
+                        $job_id !== $current_job
+                    ) {
+                        continue;
+                    }
+
+                    if (
+                        $current_filter !== 'all' &&
+                        strtolower($status) !== $current_filter
+                    ) {
+                        continue;
+                    }
+
+                    $visible_applicants++;
 
                     $job_title = get_the_title($job_id);
                     ?>
@@ -2465,6 +2896,35 @@ function devhire_employer_applicants_shortcode() {
                     </article>
 
                 <?php endwhile; ?>
+
+                <?php if ($visible_applicants === 0) : ?>
+
+                    <div class="dashboard-empty-state">
+
+                        <h3>No matching applicants</h3>
+
+                        <p>
+                            There are currently no applicants with the
+                            <strong>
+                                <?php echo esc_html(
+                                    ucfirst($current_filter)
+                                ); ?>
+                            </strong>
+                            status.
+                        </p>
+
+                        <a
+                            class="secondary-button"
+                            href="<?php echo esc_url(
+                                home_url('/employer-applicants/')
+                            ); ?>"
+                        >
+                            View All Applicants
+                        </a>
+
+                    </div>
+
+                <?php endif; ?>
 
             </div>
 
@@ -2827,6 +3287,95 @@ function devhire_employer_view_application_shortcode() {
 
             <?php endif; ?>
 
+            <div class="application-detail-section">
+
+                <h3>Application Status</h3>
+
+                <?php if (
+                    isset($_GET['status_updated']) &&
+                    $_GET['status_updated'] === '1'
+                ) : ?>
+
+                    <div class="devhire-notice success">
+                        Application status updated successfully.
+                    </div>
+
+                <?php endif; ?>
+
+                <form
+                    method="post"
+                    action="<?php echo esc_url(
+                        admin_url('admin-post.php')
+                    ); ?>"
+                    class="application-status-form"
+                >
+
+                    <input
+                        type="hidden"
+                        name="action"
+                        value="devhire_employer_application_status"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="application_id"
+                        value="<?php echo esc_attr($application_id); ?>"
+                    >
+
+                    <?php
+                    wp_nonce_field(
+                        'devhire_application_status_' . $application_id,
+                        'devhire_application_status_nonce'
+                    );
+                    ?>
+
+                    <div class="form-field">
+
+                        <label for="application-status">
+                            Status
+                        </label>
+
+                        <select
+                            id="application-status"
+                            name="application_status"
+                        >
+
+                            <?php
+                            $statuses = [
+                                'New',
+                                'Reviewing',
+                                'Interview',
+                                'Hired',
+                                'Rejected',
+                            ];
+
+                            foreach ($statuses as $option) :
+                            ?>
+
+                                <option
+                                    value="<?php echo esc_attr($option); ?>"
+                                    <?php selected($status, $option); ?>
+                                >
+                                    <?php echo esc_html($option); ?>
+                                </option>
+
+                            <?php endforeach; ?>
+
+                        </select>
+
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="primary-button"
+                    >
+                        Update Status
+                    </button>
+
+                </form>
+
+            </div>
+
 
             <div class="form-actions">
 
@@ -2854,4 +3403,215 @@ function devhire_employer_view_application_shortcode() {
 add_shortcode(
     'devhire_employer_view_application',
     'devhire_employer_view_application_shortcode'
+);
+
+/**
+ * ============================================================
+ * Employer - Update Application Status
+ * ============================================================
+ */
+
+function devhire_handle_employer_application_status() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die('You are not allowed to manage applications.');
+    }
+
+    $application_id = isset($_POST['application_id'])
+        ? absint($_POST['application_id'])
+        : 0;
+
+    $new_status = isset($_POST['application_status'])
+        ? sanitize_text_field(
+            wp_unslash($_POST['application_status'])
+        )
+        : '';
+
+    if (
+        !$application_id ||
+        !isset($_POST['devhire_application_status_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_application_status_nonce'])
+            ),
+            'devhire_application_status_' . $application_id
+        )
+    ) {
+        wp_die('Invalid request.');
+    }
+
+    /*
+     * Validate application.
+     */
+    $application = get_post($application_id);
+
+    if (
+        !$application ||
+        $application->post_type !== 'job_application'
+    ) {
+        wp_die('Application not found.');
+    }
+
+    /*
+     * Find the job connected to the application.
+     */
+    $job_id = (int) get_post_meta(
+        $application_id,
+        '_devhire_application_job',
+        true
+    );
+
+    $job = $job_id
+        ? get_post($job_id)
+        : null;
+
+    /*
+     * Critical ownership check.
+     *
+     * Employer can update applications only
+     * for jobs they own.
+     */
+    if (
+        !$job ||
+        $job->post_type !== 'job' ||
+        (int) $job->post_author !== (int) $user->ID
+    ) {
+        wp_die(
+            'You are not allowed to manage this application.'
+        );
+    }
+
+    /*
+     * Allowed workflow statuses.
+     */
+    $allowed_statuses = [
+        'New',
+        'Reviewing',
+        'Interview',
+        'Hired',
+        'Rejected',
+    ];
+
+    if (
+        !in_array(
+            $new_status,
+            $allowed_statuses,
+            true
+        )
+    ) {
+        wp_die('Invalid application status.');
+    }
+
+    update_post_meta(
+        $application_id,
+        '_devhire_application_status',
+        $new_status
+    );
+
+    wp_safe_redirect(
+        add_query_arg(
+            [
+                'application_id' => $application_id,
+                'status_updated' => '1',
+            ],
+            home_url('/employer-view-application/')
+        )
+    );
+
+    exit;
+}
+
+
+add_action(
+    'admin_post_devhire_employer_application_status',
+    'devhire_handle_employer_application_status'
+);
+
+/**
+ * ============================================================
+ * Employer - Delete Job
+ * ============================================================
+ */
+
+function devhire_handle_employer_delete_job() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die('You are not allowed to delete jobs.');
+    }
+
+    $job_id = isset($_POST['job_id'])
+        ? absint($_POST['job_id'])
+        : 0;
+
+    if (
+        !$job_id ||
+        !isset($_POST['devhire_delete_job_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_delete_job_nonce'])
+            ),
+            'devhire_delete_job_' . $job_id
+        )
+    ) {
+        wp_die('Invalid request.');
+    }
+
+    $job = get_post($job_id);
+
+    if (!$job || $job->post_type !== 'job') {
+        wp_die('Job not found.');
+    }
+
+    /*
+     * Critical ownership check.
+     * Employers may delete only their own jobs.
+     */
+    if ((int) $job->post_author !== (int) $user->ID) {
+        wp_die('You are not allowed to delete this job.');
+    }
+
+    /*
+     * Move to Trash rather than permanently deleting it.
+     */
+    $trashed = wp_trash_post($job_id);
+
+    if (!$trashed) {
+        wp_safe_redirect(
+            add_query_arg(
+                'job_delete_error',
+                '1',
+                home_url('/employer-dashboard/')
+            )
+        );
+        exit;
+    }
+
+    wp_safe_redirect(
+        add_query_arg(
+            'job_deleted',
+            '1',
+            home_url('/employer-dashboard/')
+        )
+    );
+
+    exit;
+}
+
+add_action(
+    'admin_post_devhire_employer_delete_job',
+    'devhire_handle_employer_delete_job'
 );
