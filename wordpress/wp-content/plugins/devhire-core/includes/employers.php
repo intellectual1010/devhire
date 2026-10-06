@@ -32,6 +32,218 @@ add_action(
 
 /**
  * ============================================================
+ * Employer Company Ownership
+ * ============================================================
+ */
+
+/**
+ * Get the company owned by an employer.
+ *
+ * The relationship is stored on the company post using
+ * _devhire_company_owner. This keeps company ownership separate
+ * from the employer's job ownership, which continues to use
+ * WordPress post_author.
+ */
+function devhire_get_employer_company_id($user_id = 0) {
+
+    $user_id = $user_id
+        ? absint($user_id)
+        : get_current_user_id();
+
+    if (!$user_id) {
+        return 0;
+    }
+
+    $company_ids = get_posts([
+        'post_type'              => 'company',
+        'post_status'            => ['publish', 'draft', 'pending', 'private'],
+        'posts_per_page'         => 1,
+        'fields'                 => 'ids',
+        'orderby'                => 'ID',
+        'order'                  => 'ASC',
+        'no_found_rows'          => true,
+        'update_post_meta_cache' => false,
+        'update_post_term_cache' => false,
+        'meta_query'             => [
+            [
+                'key'     => '_devhire_company_owner',
+                'value'   => $user_id,
+                'compare' => '=',
+                'type'    => 'NUMERIC',
+            ],
+        ],
+    ]);
+
+    return !empty($company_ids)
+        ? (int) $company_ids[0]
+        : 0;
+}
+
+
+/**
+ * Check whether an employer owns a specific company.
+ */
+function devhire_employer_owns_company($company_id, $user_id = 0) {
+
+    $company_id = absint($company_id);
+
+    $user_id = $user_id
+        ? absint($user_id)
+        : get_current_user_id();
+
+    if (!$company_id || !$user_id) {
+        return false;
+    }
+
+    if (get_post_type($company_id) !== 'company') {
+        return false;
+    }
+
+    $owner_id = (int) get_post_meta(
+        $company_id,
+        '_devhire_company_owner',
+        true
+    );
+
+    return $owner_id === $user_id;
+}
+
+
+/**
+ * Assign a company to an employer.
+ *
+ * A company can only be assigned when it does not already belong
+ * to another employer. An employer may own only one company in
+ * the current DevHire portal model.
+ */
+function devhire_assign_company_to_employer($company_id, $user_id = 0) {
+
+    $company_id = absint($company_id);
+
+    $user_id = $user_id
+        ? absint($user_id)
+        : get_current_user_id();
+
+    if (!$company_id || !$user_id) {
+        return false;
+    }
+
+    if (get_post_type($company_id) !== 'company') {
+        return false;
+    }
+
+    $user = get_userdata($user_id);
+
+    if (
+        !$user ||
+        !in_array('employer', (array) $user->roles, true)
+    ) {
+        return false;
+    }
+
+    $existing_company_id = devhire_get_employer_company_id($user_id);
+
+    if (
+        $existing_company_id &&
+        $existing_company_id !== $company_id
+    ) {
+        return false;
+    }
+
+    $existing_owner_id = (int) get_post_meta(
+        $company_id,
+        '_devhire_company_owner',
+        true
+    );
+
+    if (
+        $existing_owner_id &&
+        $existing_owner_id !== $user_id
+    ) {
+        return false;
+    }
+
+    update_post_meta(
+        $company_id,
+        '_devhire_company_owner',
+        $user_id
+    );
+
+    return true;
+}
+
+
+/**
+ * Synchronize every employer-owned job with the employer's company.
+ * This also repairs older jobs created before company profiles existed.
+ */
+function devhire_sync_employer_jobs_to_company(
+    $user_id = 0,
+    $company_id = 0
+) {
+    $user_id = $user_id
+        ? absint($user_id)
+        : get_current_user_id();
+
+    if (!$user_id) {
+        return 0;
+    }
+
+    $company_id = $company_id
+        ? absint($company_id)
+        : devhire_get_employer_company_id($user_id);
+
+    if (
+        !$company_id ||
+        !devhire_employer_owns_company(
+            $company_id,
+            $user_id
+        )
+    ) {
+        return 0;
+    }
+
+    $job_ids = get_posts([
+        'post_type'      => 'job',
+        'post_status'    => [
+            'publish',
+            'draft',
+            'pending',
+            'private',
+            'future',
+        ],
+        'author'         => $user_id,
+        'posts_per_page' => -1,
+        'fields'         => 'ids',
+        'no_found_rows'  => true,
+    ]);
+
+    $updated = 0;
+
+    foreach ($job_ids as $job_id) {
+        $current_company_id = (int) get_post_meta(
+            $job_id,
+            '_devhire_company',
+            true
+        );
+
+        if ($current_company_id !== $company_id) {
+            update_post_meta(
+                $job_id,
+                '_devhire_company',
+                $company_id
+            );
+
+            $updated++;
+        }
+    }
+
+    return $updated;
+}
+
+
+/**
+ * ============================================================
  * Employer Registration
  * ============================================================
  */
@@ -531,6 +743,19 @@ function devhire_employer_dashboard_shortcode() {
         </div>';
     }
 
+
+    /*
+     * Self-heal company relationships for older employer jobs.
+     */
+    $company_id = devhire_get_employer_company_id($user->ID);
+
+    if ($company_id) {
+        devhire_sync_employer_jobs_to_company(
+            $user->ID,
+            $company_id
+        );
+    }
+
     /*
      * Jobs belonging to this employer.
      *
@@ -681,6 +906,15 @@ function devhire_employer_dashboard_shortcode() {
             <a
                 class="candidate-nav-link"
                 href="<?php echo esc_url(
+                    home_url('/employer-company-profile/')
+                ); ?>"
+            >
+                Company Profile
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
                     wp_logout_url(
                         home_url('/employer-login/')
                     )
@@ -746,6 +980,102 @@ function devhire_employer_dashboard_shortcode() {
 
             <div class="devhire-notice error">
                 Unable to delete the job. Please try again.
+            </div>
+
+        <?php endif; ?>
+
+        <?php
+        $company_id = devhire_get_employer_company_id($user->ID);
+
+        if ($company_id) :
+
+            $company_name = get_the_title($company_id);
+
+            $company_industry = get_post_meta(
+                $company_id,
+                '_devhire_company_industry',
+                true
+            );
+
+            $company_location = get_post_meta(
+                $company_id,
+                '_devhire_company_location',
+                true
+            );
+        ?>
+
+            <div class="employer-company-summary">
+
+                <div>
+                    <span class="application-job-label">
+                        Company
+                    </span>
+
+                    <h2>
+                        <?php echo esc_html($company_name); ?>
+                    </h2>
+
+                    <?php if (
+                        $company_industry ||
+                        $company_location
+                    ) : ?>
+
+                        <p>
+                            <?php
+                            echo esc_html(
+                                implode(
+                                    ' · ',
+                                    array_filter([
+                                        $company_industry,
+                                        $company_location,
+                                    ])
+                                )
+                            );
+                            ?>
+                        </p>
+
+                    <?php endif; ?>
+                </div>
+
+                <div class="application-card-actions">
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url(
+                            home_url('/employer-company-profile/')
+                        ); ?>"
+                    >
+                        Edit Company
+                    </a>
+
+                    <?php if (
+                        get_post_status($company_id) === 'publish'
+                    ) : ?>
+
+                        <a
+                            class="secondary-button"
+                            href="<?php echo esc_url(
+                                get_permalink($company_id)
+                            ); ?>"
+                        >
+                            View Company
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+        <?php else : ?>
+
+            <div class="devhire-notice error">
+                Your employer account does not have a company profile yet.
+                <a href="<?php echo esc_url(
+                    home_url('/employer-company-profile/')
+                ); ?>">
+                    Create Company Profile
+                </a>
             </div>
 
         <?php endif; ?>
@@ -1237,6 +1567,19 @@ function devhire_handle_employer_create_job() {
         wp_die('You are not allowed to create jobs.');
     }
 
+    $company_id = devhire_get_employer_company_id($user->ID);
+
+    if (!$company_id) {
+        wp_safe_redirect(
+            add_query_arg(
+                'company_required',
+                '1',
+                home_url('/employer-company-profile/')
+            )
+        );
+        exit;
+    }
+
     if (
         !isset($_POST['devhire_create_job_nonce']) ||
         !wp_verify_nonce(
@@ -1338,6 +1681,24 @@ function devhire_handle_employer_create_job() {
     );
 
     /*
+     * Connect this job to the employer's company profile.
+     */
+    $company_id = devhire_get_employer_company_id($user->ID);
+
+    if ($company_id) {
+        update_post_meta(
+            $job_id,
+            '_devhire_company',
+            $company_id
+        );
+    } else {
+        delete_post_meta(
+            $job_id,
+            '_devhire_company'
+        );
+    }
+
+    /*
      * Taxonomies
      */
     $skill_ids = isset($_POST['skills'])
@@ -1422,6 +1783,23 @@ function devhire_employer_post_job_shortcode() {
         </div>';
     }
 
+    $company_id = devhire_get_employer_company_id($user->ID);
+
+    if (!$company_id) {
+        return sprintf(
+            '<div class="candidate-dashboard employer-dashboard">
+                <div class="devhire-notice error">
+                    <strong>Company profile required.</strong>
+                    Create your company profile before posting a job.
+                </div>
+                <a class="primary-button" href="%s">
+                    Create Company Profile
+                </a>
+            </div>',
+            esc_url(home_url('/employer-company-profile/'))
+        );
+    }
+
     $skills = get_terms([
         'taxonomy'   => 'job_skill',
         'hide_empty' => false,
@@ -1493,6 +1871,15 @@ function devhire_employer_post_job_shortcode() {
             <a
                 class="candidate-nav-link"
                 href="<?php echo esc_url(
+                    home_url('/employer-company-profile/')
+                ); ?>"
+            >
+                Company Profile
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
                     wp_logout_url(
                         home_url('/employer-login/')
                     )
@@ -1518,6 +1905,70 @@ function devhire_employer_post_job_shortcode() {
 
         <?php endif; ?>
 
+
+        <?php
+        $company_name = get_the_title($company_id);
+
+        $company_location = get_post_meta(
+            $company_id,
+            '_devhire_company_location',
+            true
+        );
+
+        $company_industry = get_post_meta(
+            $company_id,
+            '_devhire_company_industry',
+            true
+        );
+        ?>
+
+        <div class="employer-company-summary">
+
+            <div>
+                <span class="application-job-label">
+                    Posting as
+                </span>
+
+                <h2>
+                    <?php echo esc_html($company_name); ?>
+                </h2>
+
+                <?php if (
+                    $company_industry ||
+                    $company_location
+                ) : ?>
+
+                    <p>
+                        <?php
+                        echo esc_html(
+                            implode(
+                                ' · ',
+                                array_filter([
+                                    $company_industry,
+                                    $company_location,
+                                ])
+                            )
+                        );
+                        ?>
+                    </p>
+
+                <?php endif; ?>
+            </div>
+
+            <div class="application-card-actions">
+
+                <a
+                    class="secondary-button"
+                    href="<?php echo esc_url(
+                        home_url('/employer-company-profile/')
+                    ); ?>"
+                >
+                    Edit Company
+                </a>
+
+            </div>
+
+        </div>
 
         <form
             class="candidate-profile-form employer-job-form"
@@ -1994,6 +2445,24 @@ function devhire_handle_employer_update_job() {
     );
 
     /*
+     * Keep this job connected to the employer's company profile.
+     */
+    $company_id = devhire_get_employer_company_id($user->ID);
+
+    if ($company_id) {
+        update_post_meta(
+            $job_id,
+            '_devhire_company',
+            $company_id
+        );
+    } else {
+        delete_post_meta(
+            $job_id,
+            '_devhire_company'
+        );
+    }
+
+    /*
      * Update taxonomies.
      */
     $skill_ids = isset($_POST['skills'])
@@ -2243,6 +2712,15 @@ function devhire_employer_edit_job_shortcode() {
             <a
                 class="candidate-nav-link"
                 href="<?php echo esc_url(
+                    home_url('/employer-company-profile/')
+                ); ?>"
+            >
+                Company Profile
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
                     wp_logout_url(
                         home_url('/employer-login/')
                     )
@@ -2268,6 +2746,76 @@ function devhire_employer_edit_job_shortcode() {
 
         <?php endif; ?>
 
+
+        <?php
+        $company_id = devhire_get_employer_company_id($user->ID);
+
+        if ($company_id) :
+
+            $company_name = get_the_title($company_id);
+
+            $company_location = get_post_meta(
+                $company_id,
+                '_devhire_company_location',
+                true
+            );
+
+            $company_industry = get_post_meta(
+                $company_id,
+                '_devhire_company_industry',
+                true
+            );
+        ?>
+
+            <div class="employer-company-summary">
+
+                <div>
+                    <span class="application-job-label">
+                        Company
+                    </span>
+
+                    <h2>
+                        <?php echo esc_html($company_name); ?>
+                    </h2>
+
+                    <?php if (
+                        $company_industry ||
+                        $company_location
+                    ) : ?>
+
+                        <p>
+                            <?php
+                            echo esc_html(
+                                implode(
+                                    ' · ',
+                                    array_filter([
+                                        $company_industry,
+                                        $company_location,
+                                    ])
+                                )
+                            );
+                            ?>
+                        </p>
+
+                    <?php endif; ?>
+                </div>
+
+                <div class="application-card-actions">
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url(
+                            home_url('/employer-company-profile/')
+                        ); ?>"
+                    >
+                        Edit Company
+                    </a>
+
+                </div>
+
+            </div>
+
+        <?php endif; ?>
 
         <form
             class="candidate-profile-form employer-job-form"
@@ -2752,6 +3300,15 @@ function devhire_employer_applicants_shortcode() {
                 ); ?>"
             >
                 Applicants
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-company-profile/')
+                ); ?>"
+            >
+                Company Profile
             </a>
 
             <a
@@ -3268,6 +3825,15 @@ function devhire_employer_view_application_shortcode() {
             <a
                 class="candidate-nav-link"
                 href="<?php echo esc_url(
+                    home_url('/employer-company-profile/')
+                ); ?>"
+            >
+                Company Profile
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
                     wp_logout_url(
                         home_url('/employer-login/')
                     )
@@ -3278,6 +3844,65 @@ function devhire_employer_view_application_shortcode() {
 
         </nav>
 
+
+        <?php
+        $company_id = (int) get_post_meta(
+            $job_id,
+            '_devhire_company',
+            true
+        );
+
+        if (
+            $company_id &&
+            devhire_employer_owns_company(
+                $company_id,
+                $user->ID
+            )
+        ) :
+
+            $company_name = get_the_title($company_id);
+        ?>
+
+            <div class="employer-company-summary">
+
+                <div>
+                    <span class="application-job-label">
+                        Hiring for
+                    </span>
+
+                    <h2>
+                        <?php echo esc_html($company_name); ?>
+                    </h2>
+
+                    <p>
+                        <?php echo esc_html($job->post_title); ?>
+                    </p>
+                </div>
+
+                <?php if (
+                    get_post_status($company_id) === 'publish'
+                ) : ?>
+
+                    <div class="application-card-actions">
+
+                        <a
+                            class="secondary-button"
+                            href="<?php echo esc_url(
+                                get_permalink($company_id)
+                            ); ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            View Company
+                        </a>
+
+                    </div>
+
+                <?php endif; ?>
+
+            </div>
+
+        <?php endif; ?>
 
         <div class="application-detail-card">
 
@@ -3769,3 +4394,511 @@ add_action(
     'admin_post_devhire_employer_delete_job',
     'devhire_handle_employer_delete_job'
 );
+
+/**
+ * ============================================================
+ * Employer - Save Company Profile
+ * ============================================================
+ */
+
+function devhire_handle_employer_company_profile() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die('Only employer accounts can manage a company profile.');
+    }
+
+    if (
+        !isset($_POST['devhire_company_profile_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash($_POST['devhire_company_profile_nonce'])
+            ),
+            'devhire_company_profile'
+        )
+    ) {
+        wp_die('Invalid company profile request.');
+    }
+
+    $company_name = isset($_POST['company_name'])
+        ? sanitize_text_field(wp_unslash($_POST['company_name']))
+        : '';
+
+    $description = isset($_POST['company_description'])
+        ? wp_kses_post(wp_unslash($_POST['company_description']))
+        : '';
+
+    $website = isset($_POST['company_website'])
+        ? esc_url_raw(wp_unslash($_POST['company_website']))
+        : '';
+
+    $location = isset($_POST['company_location'])
+        ? sanitize_text_field(wp_unslash($_POST['company_location']))
+        : '';
+
+    $size = isset($_POST['company_size'])
+        ? sanitize_text_field(wp_unslash($_POST['company_size']))
+        : '';
+
+    $industry = isset($_POST['company_industry'])
+        ? sanitize_text_field(wp_unslash($_POST['company_industry']))
+        : '';
+
+    if (!$company_name) {
+        wp_safe_redirect(
+            add_query_arg(
+                'company_error',
+                'missing_name',
+                home_url('/employer-company-profile/')
+            )
+        );
+        exit;
+    }
+
+    $company_id = devhire_get_employer_company_id($user->ID);
+
+    if ($company_id) {
+
+        if (!devhire_employer_owns_company($company_id, $user->ID)) {
+            wp_die('You are not allowed to edit this company.');
+        }
+
+        $result = wp_update_post(
+            [
+                'ID'           => $company_id,
+                'post_title'   => $company_name,
+                'post_content' => $description,
+            ],
+            true
+        );
+
+    } else {
+
+        $result = wp_insert_post(
+            [
+                'post_type'    => 'company',
+                'post_status'  => 'publish',
+                'post_title'   => $company_name,
+                'post_content' => $description,
+                'post_author'  => $user->ID,
+            ],
+            true
+        );
+
+        if (!is_wp_error($result)) {
+            $company_id = (int) $result;
+
+            if (
+                !devhire_assign_company_to_employer(
+                    $company_id,
+                    $user->ID
+                )
+            ) {
+                wp_delete_post($company_id, true);
+                $company_id = 0;
+                $result = new WP_Error(
+                    'company_ownership_failed',
+                    'Unable to assign company ownership.'
+                );
+            }
+        }
+    }
+
+    if (is_wp_error($result) || !$company_id) {
+        wp_safe_redirect(
+            add_query_arg(
+                'company_error',
+                'save_failed',
+                home_url('/employer-company-profile/')
+            )
+        );
+        exit;
+    }
+
+    update_post_meta(
+        $company_id,
+        '_devhire_company_website',
+        $website
+    );
+
+    update_post_meta(
+        $company_id,
+        '_devhire_company_location',
+        $location
+    );
+
+    update_post_meta(
+        $company_id,
+        '_devhire_company_size',
+        $size
+    );
+
+    update_post_meta(
+        $company_id,
+        '_devhire_company_industry',
+        $industry
+    );
+
+    /*
+     * Synchronize and repair all existing jobs owned by this employer.
+     */
+    devhire_sync_employer_jobs_to_company(
+        $user->ID,
+        $company_id
+    );
+
+    wp_safe_redirect(
+        add_query_arg(
+            'company_updated',
+            '1',
+            home_url('/employer-company-profile/')
+        )
+    );
+
+    exit;
+}
+
+
+add_action(
+    'admin_post_devhire_employer_company_profile',
+    'devhire_handle_employer_company_profile'
+);
+
+
+/**
+ * ============================================================
+ * Employer - Company Profile
+ * ============================================================
+ */
+
+function devhire_employer_company_profile_shortcode() {
+
+    if (!is_user_logged_in()) {
+        return sprintf(
+            '<div class="devhire-notice error">
+                Please <a href="%s">sign in as an employer</a>
+                to manage your company profile.
+            </div>',
+            esc_url(home_url('/employer-login/'))
+        );
+    }
+
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        return '<div class="devhire-notice error">
+            Only employer accounts can manage company profiles.
+        </div>';
+    }
+
+    $company_id = devhire_get_employer_company_id($user->ID);
+    $company    = $company_id ? get_post($company_id) : null;
+
+    $company_name = $company
+        ? $company->post_title
+        : '';
+
+    $description = $company
+        ? $company->post_content
+        : '';
+
+    $website = $company_id
+        ? get_post_meta(
+            $company_id,
+            '_devhire_company_website',
+            true
+        )
+        : '';
+
+    $location = $company_id
+        ? get_post_meta(
+            $company_id,
+            '_devhire_company_location',
+            true
+        )
+        : '';
+
+    $size = $company_id
+        ? get_post_meta(
+            $company_id,
+            '_devhire_company_size',
+            true
+        )
+        : '';
+
+    $industry = $company_id
+        ? get_post_meta(
+            $company_id,
+            '_devhire_company_industry',
+            true
+        )
+        : '';
+
+    $error = isset($_GET['company_error'])
+        ? sanitize_key(wp_unslash($_GET['company_error']))
+        : '';
+
+    ob_start();
+    ?>
+
+    <div class="candidate-dashboard employer-dashboard">
+
+        <div class="candidate-dashboard-header">
+            <div>
+                <span class="hero-badge">
+                    Employer Portal
+                </span>
+
+                <h1>Company Profile</h1>
+
+                <p>
+                    Create or update the company candidates see
+                    with your job listings.
+                </p>
+            </div>
+        </div>
+
+        <nav class="candidate-dashboard-nav">
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-dashboard/')
+                ); ?>"
+            >
+                My Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-post-job/')
+                ); ?>"
+            >
+                Post Job
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    home_url('/employer-applicants/')
+                ); ?>"
+            >
+                Applicants
+            </a>
+
+            <a
+                class="candidate-nav-link active"
+                href="<?php echo esc_url(
+                    home_url('/employer-company-profile/')
+                ); ?>"
+            >
+                Company Profile
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
+                    wp_logout_url(
+                        home_url('/employer-login/')
+                    )
+                ); ?>"
+            >
+                Sign Out
+            </a>
+
+        </nav>
+
+        <?php if (
+            isset($_GET['company_updated']) &&
+            $_GET['company_updated'] === '1'
+        ) : ?>
+
+            <div class="devhire-notice success">
+                Company profile saved successfully.
+            </div>
+
+        <?php endif; ?>
+
+        <?php if (
+            isset($_GET['company_required']) &&
+            $_GET['company_required'] === '1'
+        ) : ?>
+
+            <div class="devhire-notice error">
+                Please create your company profile before posting a job.
+            </div>
+
+        <?php endif; ?>
+
+        <?php if ($error === 'missing_name') : ?>
+
+            <div class="devhire-notice error">
+                Company name is required.
+            </div>
+
+        <?php elseif ($error === 'save_failed') : ?>
+
+            <div class="devhire-notice error">
+                Unable to save the company profile. Please try again.
+            </div>
+
+        <?php endif; ?>
+
+        <form
+            class="candidate-profile-form employer-company-form"
+            method="post"
+            action="<?php echo esc_url(
+                admin_url('admin-post.php')
+            ); ?>"
+        >
+
+            <input
+                type="hidden"
+                name="action"
+                value="devhire_employer_company_profile"
+            >
+
+            <?php
+            wp_nonce_field(
+                'devhire_company_profile',
+                'devhire_company_profile_nonce'
+            );
+            ?>
+
+            <div class="form-field">
+                <label for="company-name">
+                    Company Name
+                </label>
+
+                <input
+                    id="company-name"
+                    name="company_name"
+                    type="text"
+                    value="<?php echo esc_attr($company_name); ?>"
+                    placeholder="CloudNova"
+                    required
+                >
+            </div>
+
+            <div class="form-field">
+                <label for="company-website">
+                    Website
+                </label>
+
+                <input
+                    id="company-website"
+                    name="company_website"
+                    type="url"
+                    value="<?php echo esc_attr($website); ?>"
+                    placeholder="https://example.com"
+                >
+            </div>
+
+            <div class="form-field">
+                <label for="company-location">
+                    Location
+                </label>
+
+                <input
+                    id="company-location"
+                    name="company_location"
+                    type="text"
+                    value="<?php echo esc_attr($location); ?>"
+                    placeholder="San Francisco, CA"
+                >
+            </div>
+
+            <div class="form-field">
+                <label for="company-industry">
+                    Industry
+                </label>
+
+                <input
+                    id="company-industry"
+                    name="company_industry"
+                    type="text"
+                    value="<?php echo esc_attr($industry); ?>"
+                    placeholder="Software Development"
+                >
+            </div>
+
+            <div class="form-field">
+                <label for="company-size">
+                    Company Size
+                </label>
+
+                <input
+                    id="company-size"
+                    name="company_size"
+                    type="text"
+                    value="<?php echo esc_attr($size); ?>"
+                    placeholder="51-200 employees"
+                >
+            </div>
+
+            <div class="form-field">
+                <label for="company-description">
+                    Company Description
+                </label>
+
+                <textarea
+                    id="company-description"
+                    name="company_description"
+                    rows="8"
+                    placeholder="Tell candidates about your company..."
+                ><?php echo esc_textarea($description); ?></textarea>
+            </div>
+
+            <div class="form-actions">
+
+                <button
+                    type="submit"
+                    class="primary-button"
+                >
+                    <?php echo $company_id
+                        ? 'Save Changes'
+                        : 'Create Company Profile'; ?>
+                </button>
+
+                <?php if (
+                    $company_id &&
+                    get_post_status($company_id) === 'publish'
+                ) : ?>
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url(
+                            get_permalink($company_id)
+                        ); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        View Public Profile
+                    </a>
+
+                <?php endif; ?>
+
+            </div>
+
+        </form>
+
+    </div>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+
+add_shortcode(
+    'devhire_employer_company_profile',
+    'devhire_employer_company_profile_shortcode'
+);
+

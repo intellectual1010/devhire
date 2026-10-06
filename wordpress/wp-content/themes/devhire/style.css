@@ -2870,3 +2870,212 @@ a {
         width: 100%;
     }
 }
+
+/* ================================
+   Employer Dashboard Polish
+================================ */
+
+.employer-dashboard .employer-company-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 28px;
+
+    margin: 0 0 24px;
+    padding: 24px 26px;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+
+    background: var(--surface);
+}
+
+.employer-dashboard .employer-company-summary > div:first-child {
+    min-width: 0;
+}
+
+.employer-dashboard .employer-company-summary .application-job-label {
+    display: block;
+    margin-bottom: 6px;
+
+    color: var(--primary);
+
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.employer-dashboard .employer-company-summary h2 {
+    margin: 0 0 5px;
+
+    color: var(--text);
+
+    font-size: 22px;
+    line-height: 1.25;
+}
+
+.employer-dashboard .employer-company-summary p {
+    margin: 0;
+
+    color: var(--muted);
+
+    font-size: 14px;
+}
+
+.employer-dashboard .employer-company-summary
+.application-card-actions {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+}
+
+.employer-dashboard .employer-company-summary
+.secondary-button {
+    min-height: 42px;
+    padding: 9px 16px;
+
+    background: var(--background);
+
+    transition:
+        border-color 0.2s ease,
+        color 0.2s ease,
+        background 0.2s ease;
+}
+
+.employer-dashboard .employer-company-summary
+.secondary-button:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(34, 211, 238, 0.05);
+}
+
+
+/* Employer dashboard statistics */
+
+.employer-dashboard .dashboard-stats {
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.employer-dashboard .dashboard-stats .dashboard-stat {
+    min-height: 102px;
+    margin: 0;
+    padding: 20px 24px;
+
+    border-radius: 12px;
+}
+
+.employer-dashboard .dashboard-stats
+.dashboard-stat span {
+    color: var(--text);
+
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.employer-dashboard .dashboard-stats
+.dashboard-stat strong {
+    margin-left: 18px;
+
+    color: var(--primary);
+
+    font-size: 30px;
+    line-height: 1;
+}
+
+
+/* Employer job search */
+
+.employer-dashboard .employer-job-search {
+    gap: 10px;
+    margin: 0 0 26px;
+}
+
+.employer-dashboard .employer-job-search input {
+    min-height: 42px;
+    padding: 10px 14px;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.employer-dashboard .employer-job-search input:focus {
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.08);
+}
+
+.employer-dashboard .employer-job-search button {
+    min-width: 88px;
+    min-height: 42px;
+
+    border: 0;
+
+    cursor: pointer;
+}
+
+
+/* My Jobs spacing */
+
+.employer-dashboard .employer-job-search + h2 {
+    margin: 0 0 18px;
+
+    font-size: 25px;
+}
+
+.employer-dashboard .application-list {
+    margin-top: 22px;
+}
+
+
+/* Employer dashboard responsive */
+
+@media (max-width: 760px) {
+
+    .employer-dashboard .employer-company-summary {
+        align-items: flex-start;
+        flex-direction: column;
+
+        padding: 22px;
+    }
+
+    .employer-dashboard .employer-company-summary
+    .application-card-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .employer-dashboard .dashboard-stats
+    .dashboard-stat {
+        min-height: 92px;
+    }
+}
+
+@media (max-width: 520px) {
+
+    .employer-dashboard .employer-company-summary
+    .application-card-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .employer-dashboard .employer-company-summary
+    .secondary-button {
+        width: 100%;
+    }
+
+    .employer-dashboard .dashboard-stats
+    .dashboard-stat {
+        min-height: 82px;
+        padding: 18px 20px;
+    }
+
+    .employer-dashboard .employer-job-search {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .employer-dashboard .employer-job-search button {
+        width: 100%;
+    }
+}
+
