@@ -25,6 +25,21 @@ function devhire_candidate_profile_shortcode() {
         )
         : '';
 
+    if (
+        $application_error === 'resume_required' &&
+        $redirect_to !== home_url('/candidate-dashboard/')
+    ) {
+        $redirect_job_id = url_to_postid($redirect_to);
+
+        if (
+            !$redirect_job_id ||
+            get_post_type($redirect_job_id) !== 'job' ||
+            get_post_status($redirect_job_id) !== 'publish'
+        ) {
+            $redirect_to = home_url('/candidate-dashboard/');
+        }
+    }
+
     if (!is_user_logged_in()) {
 
         return sprintf(
@@ -42,6 +57,27 @@ function devhire_candidate_profile_shortcode() {
 
     $user_id = get_current_user_id();
     $user    = wp_get_current_user();
+
+    if (!in_array('candidate', (array) $user->roles, true)) {
+
+        return sprintf(
+            '<div class="candidate-login-required">
+                <h2>Candidate Account Required</h2>
+                <p>
+                    Employer and administrator accounts cannot access
+                    or edit candidate profiles.
+                </p>
+                <a class="primary-button" href="%s">
+                    Sign Out and Use Candidate Account
+                </a>
+            </div>',
+            esc_url(
+                wp_logout_url(
+                    home_url('/candidate-login/')
+                )
+            )
+        );
+    }
 
     $message = '';
 
@@ -160,8 +196,45 @@ function devhire_candidate_profile_shortcode() {
 
             $max_size = 5 * 1024 * 1024;
 
+            $upload_error = isset($file['error'])
+                ? absint($file['error'])
+                : UPLOAD_ERR_NO_FILE;
 
-            if ($file['size'] > $max_size) {
+
+            if ($upload_error !== UPLOAD_ERR_OK) {
+
+                switch ($upload_error) {
+
+                    case UPLOAD_ERR_INI_SIZE:
+                    case UPLOAD_ERR_FORM_SIZE:
+                        $upload_error_message =
+                            'Resume exceeds the server upload size limit.';
+                        break;
+
+                    case UPLOAD_ERR_PARTIAL:
+                        $upload_error_message =
+                            'Resume upload was interrupted. Please try again.';
+                        break;
+
+                    case UPLOAD_ERR_NO_TMP_DIR:
+                    case UPLOAD_ERR_CANT_WRITE:
+                    case UPLOAD_ERR_EXTENSION:
+                        $upload_error_message =
+                            'The server could not save the resume. Please try again.';
+                        break;
+
+                    default:
+                        $upload_error_message =
+                            'Resume upload failed. Please try again.';
+                        break;
+                }
+
+                $message = sprintf(
+                    '<div class="devhire-notice error">%s</div>',
+                    esc_html($upload_error_message)
+                );
+
+            } elseif ($file['size'] > $max_size) {
 
                 $message =
                     '<div class="devhire-notice error">
@@ -170,13 +243,38 @@ function devhire_candidate_profile_shortcode() {
 
             } else {
 
+                $allowed_extensions = [
+                    'pdf',
+                    'doc',
+                    'docx',
+                ];
+
+                $filename_extension = strtolower(
+                    (string) pathinfo(
+                        sanitize_file_name($file['name']),
+                        PATHINFO_EXTENSION
+                    )
+                );
+
                 $file_check = wp_check_filetype_and_ext(
                     $file['tmp_name'],
                     $file['name']
                 );
 
                 if (
+                    !$filename_extension ||
+                    !in_array(
+                        $filename_extension,
+                        $allowed_extensions,
+                        true
+                    ) ||
                     empty($file_check['type']) ||
+                    empty($file_check['ext']) ||
+                    !in_array(
+                        strtolower($file_check['ext']),
+                        $allowed_extensions,
+                        true
+                    ) ||
                     !in_array(
                         $file_check['type'],
                         $allowed_types,
@@ -266,6 +364,55 @@ function devhire_candidate_profile_shortcode() {
 
 
         /*
+         * Remove the current resume when explicitly requested.
+         * Do not run this when a new resume was uploaded in the same request.
+         */
+        $remove_resume = isset($_POST['remove_resume']) &&
+            sanitize_text_field(
+                wp_unslash($_POST['remove_resume'])
+            ) === '1';
+
+        $uploaded_new_resume =
+            !empty($_FILES['resume']['name']);
+
+        if ($remove_resume && !$uploaded_new_resume) {
+
+            $current_resume_id = absint(
+                get_user_meta(
+                    $user_id,
+                    '_devhire_resume_id',
+                    true
+                )
+            );
+
+            if ($current_resume_id) {
+                wp_delete_attachment(
+                    $current_resume_id,
+                    true
+                );
+            }
+
+            delete_user_meta(
+                $user_id,
+                '_devhire_resume_id'
+            );
+
+            if ($application_error === 'resume_required') {
+                $message =
+                    '<div class="devhire-notice error">
+                        Your resume was removed, but a resume is required
+                        before you can apply for this job.
+                    </div>';
+            } else {
+                $message =
+                    '<div class="devhire-notice success">
+                        Resume removed successfully.
+                    </div>';
+            }
+        }
+
+
+        /*
         * Only show the normal success message
         * when no resume-specific message was set.
         */
@@ -333,8 +480,17 @@ function devhire_candidate_profile_shortcode() {
         ? wp_get_attachment_url($resume_id)
         : '';
 
+    if ($resume_id && !$resume_url) {
+        delete_user_meta(
+            $user_id,
+            '_devhire_resume_id'
+        );
+
+        $resume_id = 0;
+    }
+
     $resume_name = $resume_id
-        ? basename(get_attached_file($resume_id))
+        ? basename((string) get_attached_file($resume_id))
         : '';
 
     ob_start();
@@ -349,6 +505,18 @@ function devhire_candidate_profile_shortcode() {
         <div class="devhire-notice error">
             A resume is required before you can apply for this job.
             Upload your resume below, then save your profile.
+        </div>
+        <?php
+    } elseif (
+        $application_error === 'resume_required' &&
+        $resume_url
+    ) {
+        ?>
+        <div class="devhire-notice success">
+            Your resume is ready.
+            <a href="<?php echo esc_url($redirect_to); ?>">
+                Return to the job
+            </a>
         </div>
         <?php
     }
@@ -618,6 +786,22 @@ function devhire_candidate_profile_shortcode() {
                     PDF, DOC or DOCX. Maximum 5MB.
                     Uploading a new resume replaces the existing one.
                 </small>
+
+                <?php if (
+                    $resume_url &&
+                    $application_error !== 'resume_required'
+                ) : ?>
+
+                    <label class="resume-remove-option">
+                        <input
+                            type="checkbox"
+                            name="remove_resume"
+                            value="1"
+                        >
+                        Remove current resume
+                    </label>
+
+                <?php endif; ?>
 
             </div>
 

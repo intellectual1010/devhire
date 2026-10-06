@@ -658,6 +658,44 @@ function devhire_handle_application_submission() {
 
 
     /*
+     * The application target must still be a published Job.
+     * This prevents direct POST requests from applying to draft,
+     * pending, trashed, deleted, or non-job content.
+     */
+    if (
+        !$job_id ||
+        get_post_type($job_id) !== 'job' ||
+        get_post_status($job_id) !== 'publish'
+    ) {
+        wp_safe_redirect(
+            add_query_arg(
+                'application_error',
+                'job_unavailable',
+                $fallback_url
+            )
+        );
+        exit;
+    }
+
+
+    /*
+     * Reject expired jobs at the backend as well.
+     * The frontend already hides the form, but this prevents bypassing
+     * that UI with a manually crafted POST request.
+     */
+    if (devhire_job_is_expired($job_id)) {
+        wp_safe_redirect(
+            add_query_arg(
+                'application_error',
+                'job_expired',
+                $job_url
+            )
+        );
+        exit;
+    }
+
+
+    /*
      * Verify nonce.
      */
     if (
@@ -852,6 +890,17 @@ function devhire_handle_application_submission() {
         : '';
 
     if (!$resume_url) {
+
+        /*
+         * Clean up a stale resume attachment ID so the profile page
+         * correctly treats the candidate as having no usable resume.
+         */
+        if ($resume_id) {
+            delete_user_meta(
+                $current_user->ID,
+                '_devhire_resume_id'
+            );
+        }
 
         wp_safe_redirect(
             add_query_arg(
