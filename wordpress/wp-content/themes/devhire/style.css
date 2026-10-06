@@ -7706,3 +7706,350 @@ label[for="applicant-sort"] {
     }
 }
 
+/* ================================
+   Step 22.57 - Candidate Quick Actions
+================================ */
+
+.candidate-profile-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.candidate-profile-quick-actions .primary-button,
+.candidate-profile-quick-actions .secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    margin: 0;
+}
+
+@media (max-width: 620px) {
+
+    .candidate-profile-quick-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .candidate-profile-quick-actions .primary-button,
+    .candidate-profile-quick-actions .secondary-button {
+        width: 100%;
+    }
+}
+
+/* ================================
+   Step 22.58 - Candidate Profile Completeness
+================================ */
+
+.candidate-profile-completeness-panel {
+    max-width: 520px;
+    margin-top: 22px;
+}
+
+.candidate-profile-completeness-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.candidate-profile-completeness-heading span {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.candidate-profile-completeness-heading strong {
+    color: #c4b5fd;
+    font-size: 13px;
+}
+
+.candidate-profile-completeness-track {
+    overflow: hidden;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.14);
+}
+
+.candidate-profile-completeness-track > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(
+        90deg,
+        var(--primary),
+        #8b5cf6
+    );
+}
+
+/* ================================
+   Step 22.59 - Candidate Relevant Skills
+================================ */
+
+.candidate-profile-section-hint {
+    margin: -2px 0 14px !important;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.candidate-profile-skill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.candidate-profile-skill-list span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 6px 11px;
+
+    border: 1px solid rgba(34, 211, 238, 0.22);
+    border-radius: 999px;
+
+    background: rgba(34, 211, 238, 0.06);
+    color: #a5f3fc;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* ================================
+   Step 22.61 - Private Candidate Note
+================================ */
+
+.candidate-private-note-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.candidate-private-note-heading h2 {
+    margin-bottom: 8px;
+}
+
+.candidate-private-note-heading > span {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.candidate-private-note-form {
+    display: grid;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.candidate-private-note-form textarea {
+    width: 100%;
+    min-height: 118px;
+    resize: vertical;
+    padding: 13px 14px;
+
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    outline: none;
+
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text);
+
+    font: inherit;
+    line-height: 1.55;
+}
+
+.candidate-private-note-form textarea:focus {
+    border-color: var(--primary);
+}
+
+.candidate-private-note-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.candidate-private-note-actions > span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.candidate-note-success {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+
+    border: 1px solid rgba(34, 211, 238, 0.25);
+    border-radius: 10px;
+
+    background: rgba(34, 211, 238, 0.06);
+    color: #a5f3fc;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+@media (max-width: 620px) {
+
+    .candidate-private-note-heading,
+    .candidate-private-note-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .candidate-private-note-actions .primary-button {
+        width: 100%;
+    }
+}
+
+
+
+/* ================================
+   Step 22.62 - Candidate Follow-up
+================================ */
+
+.candidate-followup-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.candidate-followup-heading h2 {
+    margin-bottom: 8px;
+}
+
+.candidate-followup-heading > span {
+    padding: 5px 9px;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 999px;
+    background: rgba(139, 92, 246, 0.08);
+    color: #c4b5fd;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.candidate-followup-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.candidate-followup-form input[type="date"] {
+    min-height: 42px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    outline: none;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text);
+    color-scheme: dark;
+    font: inherit;
+}
+
+.candidate-followup-form input[type="date"]:focus {
+    border-color: var(--primary);
+}
+
+@media (max-width: 620px) {
+    .candidate-followup-heading,
+    .candidate-followup-form {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .candidate-followup-form .primary-button {
+        width: 100%;
+    }
+}
+
+
+/* ================================
+   Step 22.63 - Applicant Follow-up Due
+================================ */
+
+.applicant-followup {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.applicant-followup strong {
+    color: var(--text);
+}
+
+.applicant-followup em {
+    padding: 2px 6px;
+    border: 1px solid rgba(251, 191, 36, 0.28);
+    border-radius: 999px;
+    background: rgba(251, 191, 36, 0.08);
+    color: #fde68a;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.applicant-followup-due strong {
+    color: #fde68a;
+}
+
+
+/* ================================
+   Step 22.65 - Clear Applicant Filters
+================================ */
+
+.applicant-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 6px 11px;
+    border: 1px solid rgba(248, 113, 113, 0.24);
+    border-radius: 999px;
+    background: rgba(248, 113, 113, 0.05);
+    color: #fca5a5;
+    font-size: 11px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.applicant-filter-clear:hover {
+    border-color: rgba(248, 113, 113, 0.48);
+    background: rgba(248, 113, 113, 0.1);
+    color: #fecaca;
+}
+
+@media (max-width: 620px) {
+    .applicant-filter-clear {
+        flex: 1 1 auto;
+    }
+}
+
+
+/* ================================
+   Step 22.67 - Follow-up State Labels
+================================ */
+
+.applicant-followup em.followup-state-overdue {
+    border-color: rgba(248, 113, 113, 0.32);
+    background: rgba(248, 113, 113, 0.09);
+    color: #fca5a5;
+}
+
+.applicant-followup em.followup-state-due-today {
+    border-color: rgba(251, 191, 36, 0.32);
+    background: rgba(251, 191, 36, 0.09);
+    color: #fde68a;
+}
+
+.applicant-followup em.followup-state-upcoming {
+    border-color: rgba(34, 211, 238, 0.26);
+    background: rgba(34, 211, 238, 0.07);
+    color: #a5f3fc;
+}

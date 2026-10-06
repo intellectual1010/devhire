@@ -3943,6 +3943,44 @@ function devhire_get_application_last_activity($application_id) {
 }
 
 
+/**
+ * Get this employer's follow-up date for a candidate.
+ * Step 22.63.
+ */
+function devhire_get_employer_candidate_followup(
+    $candidate_id,
+    $employer_id = 0
+) {
+    $candidate_id = absint($candidate_id);
+    $employer_id = $employer_id
+        ? absint($employer_id)
+        : get_current_user_id();
+
+    if (!$candidate_id || !$employer_id) {
+        return '';
+    }
+
+    return (string) get_user_meta(
+        $candidate_id,
+        '_devhire_employer_candidate_followup_' . $employer_id,
+        true
+    );
+}
+
+function devhire_candidate_followup_is_due(
+    $candidate_id,
+    $employer_id = 0
+) {
+    $followup_date = devhire_get_employer_candidate_followup(
+        $candidate_id,
+        $employer_id
+    );
+
+    return $followup_date !== '' &&
+        $followup_date <= current_time('Y-m-d');
+}
+
+
 function devhire_employer_applicants_shortcode() {
 
     if (!is_user_logged_in()) {
@@ -3964,6 +4002,7 @@ function devhire_employer_applicants_shortcode() {
         'hired',
         'rejected',
         'attention',
+        'followup',
     ];
 
     $current_filter = isset($_GET['status'])
@@ -3993,6 +4032,8 @@ function devhire_employer_applicants_shortcode() {
         'name_desc',
         'attention',
         'activity',
+        'followup',
+        'followup_due',
     ];
 
     $current_sort = isset($_GET['sort'])
@@ -4066,6 +4107,7 @@ function devhire_employer_applicants_shortcode() {
     $hired_applicants = 0;
     $rejected_applicants = 0;
     $attention_applicants = 0;
+    $followup_applicants = 0;
 
     if ($applications && $applications->have_posts()) {
 
@@ -4108,6 +4150,22 @@ function devhire_employer_applicants_shortcode() {
 
             if (devhire_application_needs_attention($application->ID)) {
                 $attention_applicants++;
+            }
+
+            $count_candidate_id = (int) get_post_meta(
+                $application->ID,
+                '_devhire_candidate_user',
+                true
+            );
+
+            if (
+                $count_candidate_id &&
+                devhire_candidate_followup_is_due(
+                    $count_candidate_id,
+                    get_current_user_id()
+                )
+            ) {
+                $followup_applicants++;
             }
         }
     }
@@ -4254,6 +4312,10 @@ function devhire_employer_applicants_shortcode() {
             'attention' => [
                 'label' => 'Needs Attention',
                 'count' => $attention_applicants,
+            ],
+            'followup' => [
+                'label' => 'Follow-up Due',
+                'count' => $followup_applicants,
             ],
         ];
         ?>
@@ -4476,6 +4538,26 @@ function devhire_employer_applicants_shortcode() {
                     </option>
 
                     <option
+                        value="followup_due"
+                        <?php selected(
+                            $current_sort,
+                            'followup_due'
+                        ); ?>
+                    >
+                        Follow-up Due First
+                    </option>
+
+                    <option
+                        value="followup"
+                        <?php selected(
+                            $current_sort,
+                            'followup'
+                        ); ?>
+                    >
+                        Follow-up Date
+                    </option>
+
+                    <option
                         value="activity"
                         <?php selected(
                             $current_sort,
@@ -4491,6 +4573,13 @@ function devhire_employer_applicants_shortcode() {
             <div class="applicant-filters">
 
                 <?php
+                $has_active_applicant_filters =
+                    $current_filter !== 'all' ||
+                    $current_job > 0 ||
+                    $applicant_search !== '' ||
+                    $current_sort !== 'newest' ||
+                    $current_page > 1;
+
                 $filters = [
                     'all'       => 'All',
                     'new'       => 'New',
@@ -4499,6 +4588,7 @@ function devhire_employer_applicants_shortcode() {
                     'hired'     => 'Hired',
                     'rejected'  => 'Rejected',
                     'attention' => 'Needs Attention',
+                    'followup'  => 'Follow-up Due',
                 ];
 
                 foreach ($filters as $filter_key => $filter_label) :
@@ -4542,6 +4632,17 @@ function devhire_employer_applicants_shortcode() {
                     </a>
 
                 <?php endforeach; ?>
+
+                <?php if ($has_active_applicant_filters) : ?>
+                    <a
+                        class="applicant-filter-clear"
+                        href="<?php echo esc_url(
+                            home_url('/employer-applicants/')
+                        ); ?>"
+                    >
+                        Clear Filters
+                    </a>
+                <?php endif; ?>
 
             </div>
             
@@ -4681,6 +4782,122 @@ function devhire_employer_applicants_shortcode() {
                                 );
                             }
                         );
+                    } elseif ($current_sort === 'followup_due') {
+                        usort(
+                            $applications->posts,
+                            static function ($a, $b) {
+                                $employer_id = get_current_user_id();
+
+                                $a_candidate_id = (int) get_post_meta(
+                                    $a->ID,
+                                    '_devhire_candidate_user',
+                                    true
+                                );
+                                $b_candidate_id = (int) get_post_meta(
+                                    $b->ID,
+                                    '_devhire_candidate_user',
+                                    true
+                                );
+
+                                $a_due = $a_candidate_id
+                                    ? devhire_candidate_followup_is_due(
+                                        $a_candidate_id,
+                                        $employer_id
+                                    )
+                                    : false;
+
+                                $b_due = $b_candidate_id
+                                    ? devhire_candidate_followup_is_due(
+                                        $b_candidate_id,
+                                        $employer_id
+                                    )
+                                    : false;
+
+                                if ($a_due !== $b_due) {
+                                    return $a_due ? -1 : 1;
+                                }
+
+                                $a_followup = $a_candidate_id
+                                    ? devhire_get_employer_candidate_followup(
+                                        $a_candidate_id,
+                                        $employer_id
+                                    )
+                                    : '';
+
+                                $b_followup = $b_candidate_id
+                                    ? devhire_get_employer_candidate_followup(
+                                        $b_candidate_id,
+                                        $employer_id
+                                    )
+                                    : '';
+
+                                if ($a_followup && $b_followup) {
+                                    $comparison = strcmp(
+                                        $a_followup,
+                                        $b_followup
+                                    );
+
+                                    if ($comparison !== 0) {
+                                        return $comparison;
+                                    }
+                                } elseif ($a_followup) {
+                                    return -1;
+                                } elseif ($b_followup) {
+                                    return 1;
+                                }
+
+                                return $b->ID <=> $a->ID;
+                            }
+                        );
+                    } elseif ($current_sort === 'followup') {
+                        usort(
+                            $applications->posts,
+                            static function ($a, $b) {
+                                $a_candidate_id = (int) get_post_meta(
+                                    $a->ID,
+                                    '_devhire_candidate_user',
+                                    true
+                                );
+                                $b_candidate_id = (int) get_post_meta(
+                                    $b->ID,
+                                    '_devhire_candidate_user',
+                                    true
+                                );
+                                $employer_id = get_current_user_id();
+
+                                $a_followup = $a_candidate_id
+                                    ? devhire_get_employer_candidate_followup(
+                                        $a_candidate_id,
+                                        $employer_id
+                                    )
+                                    : '';
+                                $b_followup = $b_candidate_id
+                                    ? devhire_get_employer_candidate_followup(
+                                        $b_candidate_id,
+                                        $employer_id
+                                    )
+                                    : '';
+
+                                if ($a_followup === '' && $b_followup === '') {
+                                    return $b->ID <=> $a->ID;
+                                }
+                                if ($a_followup === '') {
+                                    return 1;
+                                }
+                                if ($b_followup === '') {
+                                    return -1;
+                                }
+
+                                $comparison = strcmp(
+                                    $a_followup,
+                                    $b_followup
+                                );
+
+                                return $comparison !== 0
+                                    ? $comparison
+                                    : ($b->ID <=> $a->ID);
+                            }
+                        );
                     } elseif ($current_sort === 'activity') {
                         usort(
                             $applications->posts,
@@ -4729,6 +4946,22 @@ function devhire_employer_applicants_shortcode() {
                         if (
                             !devhire_application_needs_attention(
                                 $filter_id
+                            )
+                        ) {
+                            continue;
+                        }
+                    } elseif ($current_filter === 'followup') {
+                        $filter_candidate_id = (int) get_post_meta(
+                            $filter_id,
+                            '_devhire_candidate_user',
+                            true
+                        );
+
+                        if (
+                            !$filter_candidate_id ||
+                            !devhire_candidate_followup_is_due(
+                                $filter_candidate_id,
+                                get_current_user_id()
                             )
                         ) {
                             continue;
@@ -4967,7 +5200,25 @@ function devhire_employer_applicants_shortcode() {
                         continue;
                     }
 
-                    if (
+                    if ($current_filter === 'attention') {
+                        if (
+                            !devhire_application_needs_attention(
+                                $application_id
+                            )
+                        ) {
+                            continue;
+                        }
+                    } elseif ($current_filter === 'followup') {
+                        if (
+                            !$candidate_user_id ||
+                            !devhire_candidate_followup_is_due(
+                                $candidate_user_id,
+                                get_current_user_id()
+                            )
+                        ) {
+                            continue;
+                        }
+                    } elseif (
                         $current_filter !== 'all' &&
                         strtolower($status) !== $current_filter
                     ) {
@@ -5105,15 +5356,78 @@ function devhire_employer_applicants_shortcode() {
                         ) * 100
                     );
 
+                    $applicant_return_args = [];
+
+                    if ($current_filter !== 'all') {
+                        $applicant_return_args['status'] = $current_filter;
+                    }
+                    if ($current_job) {
+                        $applicant_return_args['job_id'] = $current_job;
+                    }
+                    if ($applicant_search !== '') {
+                        $applicant_return_args['applicant_search'] =
+                            $applicant_search;
+                    }
+                    if ($current_sort !== 'newest') {
+                        $applicant_return_args['sort'] = $current_sort;
+                    }
+                    if ($current_page > 1) {
+                        $applicant_return_args['applicant_page'] =
+                            $current_page;
+                    }
+
+                    $applicant_return_url = $applicant_return_args
+                        ? add_query_arg(
+                            $applicant_return_args,
+                            home_url('/employer-applicants/')
+                        )
+                        : home_url('/employer-applicants/');
+
                     $candidate_profile_url = $candidate_user_id
                         ? add_query_arg(
-                            'candidate_id',
-                            $candidate_user_id,
-                            home_url(
-                                '/employer-candidate-profile/'
-                            )
+                            [
+                                'candidate_id' => $candidate_user_id,
+                                'return_url'   => $applicant_return_url,
+                            ],
+                            home_url('/employer-candidate-profile/')
                         )
                         : '';
+
+                    $application_detail_url = add_query_arg(
+                        [
+                            'application_id' => $application_id,
+                            'return_url'     => $applicant_return_url,
+                        ],
+                        home_url('/employer-view-application/')
+                    );
+
+                    $candidate_followup_date = $candidate_user_id
+                        ? devhire_get_employer_candidate_followup(
+                            $candidate_user_id,
+                            get_current_user_id()
+                        )
+                        : '';
+
+                    $candidate_followup_due =
+                        $candidate_user_id &&
+                        devhire_candidate_followup_is_due(
+                            $candidate_user_id,
+                            get_current_user_id()
+                        );
+
+                    $candidate_followup_state = '';
+
+                    if ($candidate_followup_date) {
+                        $today = current_time('Y-m-d');
+
+                        if ($candidate_followup_date < $today) {
+                            $candidate_followup_state = 'Overdue';
+                        } elseif ($candidate_followup_date === $today) {
+                            $candidate_followup_state = 'Due today';
+                        } else {
+                            $candidate_followup_state = 'Upcoming';
+                        }
+                    }
                     ?>
 
                     <article class="application-card applicant-card-v2">
@@ -5280,21 +5594,13 @@ function devhire_employer_applicants_shortcode() {
                                     <?php endif; ?>
 
                                     <a
-                                        class="secondary-button"
-                                        href="<?php
-                                        echo esc_url(
-                                            add_query_arg(
-                                                'application_id',
-                                                $application_id,
-                                                home_url(
-                                                    '/employer-view-application/'
-                                                )
-                                            )
-                                        );
-                                        ?>"
-                                    >
-                                        View Application
-                                    </a>
+                                            class="primary-button"
+                                            href="<?php echo esc_url(
+                                                $application_detail_url
+                                            ); ?>"
+                                        >
+                                            View Application
+                                        </a>
 
                                     <?php if (
                                         $applicant_phone ||
@@ -5399,6 +5705,52 @@ function devhire_employer_applicants_shortcode() {
                                         <?php echo esc_html(
                                             $last_activity_age
                                         ); ?>
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php if ($candidate_followup_date) : ?>
+                                    <span
+                                        class="<?php echo esc_attr(
+                                            $candidate_followup_due
+                                                ? 'applicant-followup applicant-followup-due'
+                                                : 'applicant-followup'
+                                        ); ?>"
+                                    >
+                                        Follow-up:
+                                        <strong>
+                                            <?php echo esc_html(
+                                                wp_date(
+                                                    get_option(
+                                                        'date_format'
+                                                    ),
+                                                    strtotime(
+                                                        $candidate_followup_date
+                                                    )
+                                                )
+                                            ); ?>
+                                        </strong>
+                                        <?php if (
+                                            $candidate_followup_state
+                                        ) : ?>
+                                            <em
+                                                class="<?php echo esc_attr(
+                                                    'followup-state-' .
+                                                    sanitize_html_class(
+                                                        strtolower(
+                                                            str_replace(
+                                                                ' ',
+                                                                '-',
+                                                                $candidate_followup_state
+                                                            )
+                                                        )
+                                                    )
+                                                ); ?>"
+                                            >
+                                                <?php echo esc_html(
+                                                    $candidate_followup_state
+                                                ); ?>
+                                            </em>
+                                        <?php endif; ?>
                                     </span>
                                 <?php endif; ?>
 
@@ -5600,6 +5952,337 @@ add_shortcode(
  */
 
 /**
+ * Save an employer-private note for a candidate.
+ * Step 22.61.
+ */
+
+/**
+ * Validate a return URL used by the employer hiring workflow.
+ *
+ * Keeps navigation inside the site and falls back to the Applicants page.
+ * Step 22.72.
+ */
+function devhire_get_employer_applicants_return_url($raw_url = '') {
+
+    $default_url = home_url('/employer-applicants/');
+
+    if (!$raw_url) {
+        return $default_url;
+    }
+
+    return wp_validate_redirect(
+        esc_url_raw(wp_unslash($raw_url)),
+        $default_url
+    );
+}
+
+
+function devhire_handle_employer_candidate_note() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $current_user_id = get_current_user_id();
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die(
+            esc_html__(
+                'You do not have permission to save candidate notes.',
+                'devhire'
+            )
+        );
+    }
+
+    $candidate_id = isset($_POST['candidate_id'])
+        ? absint($_POST['candidate_id'])
+        : 0;
+
+    if (
+        !$candidate_id ||
+        !isset($_POST['devhire_candidate_note_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash(
+                    $_POST['devhire_candidate_note_nonce']
+                )
+            ),
+            'devhire_save_candidate_note_' . $candidate_id
+        )
+    ) {
+        wp_die(
+            esc_html__(
+                'Invalid candidate note request.',
+                'devhire'
+            )
+        );
+    }
+
+    $candidate = get_userdata($candidate_id);
+
+    if (!$candidate) {
+        wp_die(
+            esc_html__('Candidate not found.', 'devhire')
+        );
+    }
+
+    $application_ids = get_posts([
+        'post_type'      => 'job_application',
+        'post_status'    => 'private',
+        'posts_per_page' => -1,
+        'meta_key'       => '_devhire_candidate_user',
+        'meta_value'     => $candidate_id,
+        'fields'         => 'ids',
+    ]);
+
+    $authorized = false;
+
+    foreach ($application_ids as $application_id) {
+        $job_id = (int) get_post_meta(
+            $application_id,
+            '_devhire_application_job',
+            true
+        );
+
+        if (
+            $job_id &&
+            (int) get_post_field(
+                'post_author',
+                $job_id
+            ) === $current_user_id
+        ) {
+            $authorized = true;
+            break;
+        }
+    }
+
+    if (!$authorized) {
+        wp_die(
+            esc_html__(
+                'You do not have permission to update this candidate.',
+                'devhire'
+            )
+        );
+    }
+
+    $note = isset($_POST['candidate_note'])
+        ? sanitize_textarea_field(
+            wp_unslash($_POST['candidate_note'])
+        )
+        : '';
+
+    $note_key =
+        '_devhire_employer_candidate_note_' .
+        $current_user_id;
+
+    $updated_key =
+        '_devhire_employer_candidate_note_updated_' .
+        $current_user_id;
+
+    if ($note !== '') {
+        update_user_meta(
+            $candidate_id,
+            $note_key,
+            $note
+        );
+
+        update_user_meta(
+            $candidate_id,
+            $updated_key,
+            current_time('timestamp')
+        );
+    } else {
+        delete_user_meta(
+            $candidate_id,
+            $note_key
+        );
+
+        delete_user_meta(
+            $candidate_id,
+            $updated_key
+        );
+    }
+
+    $return_url = devhire_get_employer_applicants_return_url(
+        isset($_POST['return_url'])
+            ? $_POST['return_url']
+            : ''
+    );
+
+    $redirect_url = add_query_arg(
+        [
+            'candidate_id' => $candidate_id,
+            'note_saved'   => 1,
+            'return_url'     => $return_url,
+        ],
+        home_url('/employer-candidate-profile/')
+    );
+
+    wp_safe_redirect($redirect_url);
+    exit;
+}
+add_action(
+    'admin_post_devhire_save_candidate_note',
+    'devhire_handle_employer_candidate_note'
+);
+
+
+/**
+ * Save an employer follow-up date for a candidate.
+ * Step 22.62.
+ */
+function devhire_handle_employer_candidate_followup() {
+
+    if (!is_user_logged_in()) {
+        wp_safe_redirect(home_url('/employer-login/'));
+        exit;
+    }
+
+    $current_user_id = get_current_user_id();
+    $user = wp_get_current_user();
+
+    if (!in_array('employer', (array) $user->roles, true)) {
+        wp_die(
+            esc_html__(
+                'You do not have permission to update candidate follow-ups.',
+                'devhire'
+            )
+        );
+    }
+
+    $candidate_id = isset($_POST['candidate_id'])
+        ? absint($_POST['candidate_id'])
+        : 0;
+
+    if (
+        !$candidate_id ||
+        !isset($_POST['devhire_candidate_followup_nonce']) ||
+        !wp_verify_nonce(
+            sanitize_text_field(
+                wp_unslash(
+                    $_POST['devhire_candidate_followup_nonce']
+                )
+            ),
+            'devhire_save_candidate_followup_' . $candidate_id
+        )
+    ) {
+        wp_die(
+            esc_html__(
+                'Invalid candidate follow-up request.',
+                'devhire'
+            )
+        );
+    }
+
+    $candidate = get_userdata($candidate_id);
+
+    if (!$candidate) {
+        wp_die(
+            esc_html__('Candidate not found.', 'devhire')
+        );
+    }
+
+    $application_ids = get_posts([
+        'post_type'      => 'job_application',
+        'post_status'    => 'private',
+        'posts_per_page' => -1,
+        'meta_key'       => '_devhire_candidate_user',
+        'meta_value'     => $candidate_id,
+        'fields'         => 'ids',
+    ]);
+
+    $authorized = false;
+
+    foreach ($application_ids as $application_id) {
+        $job_id = (int) get_post_meta(
+            $application_id,
+            '_devhire_application_job',
+            true
+        );
+
+        if (
+            $job_id &&
+            (int) get_post_field(
+                'post_author',
+                $job_id
+            ) === $current_user_id
+        ) {
+            $authorized = true;
+            break;
+        }
+    }
+
+    if (!$authorized) {
+        wp_die(
+            esc_html__(
+                'You do not have permission to update this candidate.',
+                'devhire'
+            )
+        );
+    }
+
+    $followup_date = isset($_POST['candidate_followup_date'])
+        ? sanitize_text_field(
+            wp_unslash($_POST['candidate_followup_date'])
+        )
+        : '';
+
+    if (
+        $followup_date !== '' &&
+        !preg_match(
+            '/^\d{4}-\d{2}-\d{2}$/',
+            $followup_date
+        )
+    ) {
+        wp_die(
+            esc_html__('Invalid follow-up date.', 'devhire')
+        );
+    }
+
+    $followup_key =
+        '_devhire_employer_candidate_followup_' .
+        $current_user_id;
+
+    if ($followup_date !== '') {
+        update_user_meta(
+            $candidate_id,
+            $followup_key,
+            $followup_date
+        );
+    } else {
+        delete_user_meta(
+            $candidate_id,
+            $followup_key
+        );
+    }
+
+    $return_url = devhire_get_employer_applicants_return_url(
+        isset($_POST['return_url'])
+            ? $_POST['return_url']
+            : ''
+    );
+
+    wp_safe_redirect(
+        add_query_arg(
+            [
+                'candidate_id'   => $candidate_id,
+                'followup_saved' => 1,
+            'return_url'     => $return_url,
+            ],
+            home_url('/employer-candidate-profile/')
+        )
+    );
+    exit;
+}
+add_action(
+    'admin_post_devhire_save_candidate_followup',
+    'devhire_handle_employer_candidate_followup'
+);
+
+
+/**
  * Employer-facing candidate profile.
  * Step 22.54.
  */
@@ -5610,6 +6293,12 @@ function devhire_employer_candidate_profile_shortcode() {
     }
 
     $current_user_id = get_current_user_id();
+
+    $return_url = devhire_get_employer_applicants_return_url(
+        isset($_GET['return_url'])
+            ? $_GET['return_url']
+            : ''
+    );
     $user = wp_get_current_user();
 
     if (!in_array('employer', (array) $user->roles, true)) {
@@ -5630,7 +6319,7 @@ function devhire_employer_candidate_profile_shortcode() {
 
     $application_ids = get_posts([
         'post_type'      => 'job_application',
-        'post_status'    => 'publish',
+        'post_status'    => 'private',
         'posts_per_page' => -1,
         'meta_key'       => '_devhire_candidate_user',
         'meta_value'     => $candidate_id,
@@ -5661,6 +6350,36 @@ function devhire_employer_candidate_profile_shortcode() {
     if (!$authorized) {
         return '<p>You do not have permission to view this candidate.</p>';
     }
+
+    $candidate_note_key =
+        '_devhire_employer_candidate_note_' .
+        $current_user_id;
+
+    $candidate_note_updated_key =
+        '_devhire_employer_candidate_note_updated_' .
+        $current_user_id;
+
+    $candidate_private_note = get_user_meta(
+        $candidate_id,
+        $candidate_note_key,
+        true
+    );
+
+    $candidate_note_updated = (int) get_user_meta(
+        $candidate_id,
+        $candidate_note_updated_key,
+        true
+    );
+
+    $candidate_followup_key =
+        '_devhire_employer_candidate_followup_' .
+        $current_user_id;
+
+    $candidate_followup_date = get_user_meta(
+        $candidate_id,
+        $candidate_followup_key,
+        true
+    );
 
     $title = get_user_meta(
         $candidate_id,
@@ -5696,7 +6415,42 @@ function devhire_employer_candidate_profile_shortcode() {
         ? wp_get_attachment_url($resume_id)
         : '';
 
+    $candidate_email_subject = rawurlencode(
+        'Regarding your application'
+    );
+
+    $candidate_email_url =
+        'mailto:' . sanitize_email($candidate->user_email) .
+        '?subject=' . $candidate_email_subject;
+
+    $candidate_profile_fields = [
+        $candidate->user_email,
+        $phone,
+        $linkedin,
+        $title,
+        $location,
+        $bio,
+        $resume_url,
+    ];
+
+    $candidate_completed_fields = count(
+        array_filter(
+            $candidate_profile_fields,
+            static function ($value) {
+                return !empty($value);
+            }
+        )
+    );
+
+    $candidate_profile_completeness = (int) round(
+        (
+            $candidate_completed_fields /
+            count($candidate_profile_fields)
+        ) * 100
+    );
+
     $employer_candidate_applications = [];
+    $candidate_relevant_skills = [];
 
     foreach ($application_ids as $application_id) {
         $job_id = (int) get_post_meta(
@@ -5735,7 +6489,33 @@ function devhire_employer_candidate_profile_shortcode() {
                 $application_id
             ),
         ];
+
+        $job_skills = wp_get_post_terms(
+            $job_id,
+            'job_skill',
+            [
+                'fields' => 'names',
+            ]
+        );
+
+        if (!is_wp_error($job_skills)) {
+            foreach ($job_skills as $job_skill) {
+                $candidate_relevant_skills[
+                    sanitize_title($job_skill)
+                ] = $job_skill;
+            }
+        }
     }
+
+    $candidate_relevant_skills = array_values(
+        $candidate_relevant_skills
+    );
+
+    natcasesort($candidate_relevant_skills);
+
+    $candidate_relevant_skills = array_values(
+        $candidate_relevant_skills
+    );
 
     usort(
         $employer_candidate_applications,
@@ -5797,6 +6577,33 @@ function devhire_employer_candidate_profile_shortcode() {
                     ); ?>
                 </p>
             <?php endif; ?>
+
+            <div class="candidate-profile-completeness-panel">
+                <div class="candidate-profile-completeness-heading">
+                    <span>Profile completeness</span>
+                    <strong>
+                        <?php echo esc_html(
+                            $candidate_profile_completeness
+                        ); ?>%
+                    </strong>
+                </div>
+
+                <div
+                    class="candidate-profile-completeness-track"
+                    role="progressbar"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="<?php echo esc_attr(
+                        $candidate_profile_completeness
+                    ); ?>"
+                >
+                    <span
+                        style="width: <?php echo esc_attr(
+                            $candidate_profile_completeness
+                        ); ?>%;"
+                    ></span>
+                </div>
+            </div>
 
             <div class="candidate-profile-stats">
                 <div>
@@ -5866,12 +6673,260 @@ function devhire_employer_candidate_profile_shortcode() {
                 <?php endif; ?>
             </div>
 
+            <div class="candidate-profile-quick-actions">
+                <a
+                    class="primary-button"
+                    href="<?php echo esc_attr(
+                        $candidate_email_url
+                    ); ?>"
+                >
+                    Email Candidate
+                </a>
+
+                <?php if ($resume_url) : ?>
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url($resume_url); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        View Resume
+                    </a>
+                <?php endif; ?>
+
+                <?php if ($linkedin) : ?>
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url($linkedin); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        LinkedIn
+                    </a>
+                <?php endif; ?>
+
+                <?php if ($phone) : ?>
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_attr(
+                            'tel:' . preg_replace(
+                                '/[^0-9+]/',
+                                '',
+                                $phone
+                            )
+                        ); ?>"
+                    >
+                        Call
+                    </a>
+                <?php endif; ?>
+            </div>
+
             <?php if ($bio) : ?>
                 <div class="candidate-profile-section">
                     <h2>About</h2>
                     <p><?php echo nl2br(esc_html($bio)); ?></p>
                 </div>
             <?php endif; ?>
+
+            <?php if ($candidate_relevant_skills) : ?>
+                <div class="candidate-profile-section">
+                    <h2>Relevant Skills</h2>
+
+                    <p class="candidate-profile-section-hint">
+                        Skills associated with the jobs this candidate
+                        applied to at your company.
+                    </p>
+
+                    <div class="candidate-profile-skill-list">
+                        <?php foreach (
+                            $candidate_relevant_skills as $candidate_skill
+                        ) : ?>
+                            <span>
+                                <?php echo esc_html($candidate_skill); ?>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="candidate-profile-section">
+                <div class="candidate-followup-heading">
+                    <div>
+                        <h2>Follow-up</h2>
+                        <p class="candidate-profile-section-hint">
+                            Set the next date you want to contact this candidate.
+                        </p>
+                    </div>
+
+                    <?php if ($candidate_followup_date) : ?>
+                        <span>
+                            <?php
+                            $followup_timestamp = strtotime(
+                                $candidate_followup_date . ' 00:00:00'
+                            );
+                            $today_timestamp = strtotime(
+                                current_time('Y-m-d') . ' 00:00:00'
+                            );
+
+                            if ($followup_timestamp < $today_timestamp) {
+                                echo esc_html__('Overdue', 'devhire');
+                            } elseif (
+                                $followup_timestamp === $today_timestamp
+                            ) {
+                                echo esc_html__('Today', 'devhire');
+                            } else {
+                                echo esc_html__('Scheduled', 'devhire');
+                            }
+                            ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (
+                    isset($_GET['followup_saved']) &&
+                    (int) $_GET['followup_saved'] === 1
+                ) : ?>
+                    <div class="candidate-note-success">
+                        Follow-up date saved.
+                    </div>
+                <?php endif; ?>
+
+                <form
+                    class="candidate-followup-form"
+                    method="post"
+                    action="<?php echo esc_url(
+                        admin_url('admin-post.php')
+                    ); ?>"
+                >
+                    <input
+                        type="hidden"
+                        name="action"
+                        value="devhire_save_candidate_followup"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="candidate_id"
+                        value="<?php echo esc_attr($candidate_id); ?>
+
+                    <input
+                        type="hidden"
+                        name="return_url"
+                        value="<?php echo esc_attr($return_url); ?>"
+                    >"
+                    >
+
+                    <?php wp_nonce_field(
+                        'devhire_save_candidate_followup_' .
+                        $candidate_id,
+                        'devhire_candidate_followup_nonce'
+                    ); ?>
+
+                    <input
+                        type="date"
+                        name="candidate_followup_date"
+                        value="<?php echo esc_attr(
+                            $candidate_followup_date
+                        ); ?>"
+                    >
+
+                    <button
+                        type="submit"
+                        class="primary-button"
+                    >
+                        Save Follow-up
+                    </button>
+                </form>
+            </div>
+
+            <div class="candidate-profile-section">
+                <div class="candidate-private-note-heading">
+                    <div>
+                        <h2>Private Employer Note</h2>
+                        <p class="candidate-profile-section-hint">
+                            Visible only to your employer account.
+                        </p>
+                    </div>
+
+                    <?php if ($candidate_note_updated) : ?>
+                        <span>
+                            Updated
+                            <?php echo esc_html(
+                                human_time_diff(
+                                    $candidate_note_updated,
+                                    current_time('timestamp')
+                                )
+                            ); ?>
+                            ago
+                        </span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (
+                    isset($_GET['note_saved']) &&
+                    (int) $_GET['note_saved'] === 1
+                ) : ?>
+                    <div class="candidate-note-success">
+                        Candidate note saved.
+                    </div>
+                <?php endif; ?>
+
+                <form
+                    class="candidate-private-note-form"
+                    method="post"
+                    action="<?php echo esc_url(
+                        admin_url('admin-post.php')
+                    ); ?>"
+                >
+                    <input
+                        type="hidden"
+                        name="action"
+                        value="devhire_save_candidate_note"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="candidate_id"
+                        value="<?php echo esc_attr(
+                            $candidate_id
+                        ); ?>
+
+                    <input
+                        type="hidden"
+                        name="return_url"
+                        value="<?php echo esc_attr($return_url); ?>"
+                    >"
+                    >
+
+                    <?php wp_nonce_field(
+                        'devhire_save_candidate_note_' .
+                        $candidate_id,
+                        'devhire_candidate_note_nonce'
+                    ); ?>
+
+                    <textarea
+                        name="candidate_note"
+                        rows="4"
+                        maxlength="2000"
+                        placeholder="Add interview notes, follow-up reminders, or other private hiring notes..."
+                    ><?php echo esc_textarea(
+                        $candidate_private_note
+                    ); ?></textarea>
+
+                    <div class="candidate-private-note-actions">
+                        <span>
+                            Clearing the note and saving removes it.
+                        </span>
+
+                        <button
+                            type="submit"
+                            class="primary-button"
+                        >
+                            Save Note
+                        </button>
+                    </div>
+                </form>
+            </div>
 
             <?php if ($employer_candidate_applications) : ?>
                 <div class="candidate-profile-section">
@@ -5951,7 +7006,7 @@ function devhire_employer_candidate_profile_shortcode() {
                 <a
                     class="secondary-button"
                     href="<?php echo esc_url(
-                        home_url('/employer-applicants/')
+                        $return_url
                     ); ?>"
                 >
                     Back to Applicants
@@ -5983,6 +7038,12 @@ function devhire_employer_view_application_shortcode() {
     }
 
     $user = wp_get_current_user();
+
+    $return_url = devhire_get_employer_applicants_return_url(
+        isset($_GET['return_url'])
+            ? $_GET['return_url']
+            : ''
+    );
 
     if (!in_array('employer', (array) $user->roles, true)) {
         return '<div class="devhire-notice error">
@@ -6418,7 +7479,13 @@ function devhire_employer_view_application_shortcode() {
                     ); ?>"
                 >
 
-                <?php wp_nonce_field(
+                                    <input
+                        type="hidden"
+                        name="return_url"
+                        value="<?php echo esc_attr($return_url); ?>"
+                    >
+
+<?php wp_nonce_field(
                     'devhire_application_notes_' .
                     $application_id,
                     'devhire_application_notes_nonce'
@@ -6749,6 +7816,12 @@ function devhire_employer_view_application_shortcode() {
 
                                 <input
                                     type="hidden"
+                                    name="return_url"
+                                    value="<?php echo esc_attr($return_url); ?>"
+                                >
+
+                                <input
+                                    type="hidden"
                                     name="application_status"
                                     value="<?php echo esc_attr(
                                         $quick_status
@@ -6802,6 +7875,12 @@ function devhire_employer_view_application_shortcode() {
                         type="hidden"
                         name="application_id"
                         value="<?php echo esc_attr($application_id); ?>"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="return_url"
+                        value="<?php echo esc_attr($return_url); ?>"
                     >
 
                     <?php
@@ -6864,7 +7943,7 @@ function devhire_employer_view_application_shortcode() {
                 <a
                     class="secondary-button"
                     href="<?php echo esc_url(
-                        home_url('/employer-applicants/')
+                        $return_url
                     ); ?>"
                 >
                     Back to Applicants
@@ -7005,10 +8084,17 @@ function devhire_handle_employer_application_notes() {
         );
     }
 
+    $return_url = devhire_get_employer_applicants_return_url(
+        isset($_POST['return_url'])
+            ? $_POST['return_url']
+            : ''
+    );
+
     $redirect_url = add_query_arg(
         [
             'application_id' => $application_id,
-            'notes_updated' => '1',
+            'notes_updated'  => '1',
+            'return_url'     => $return_url,
         ],
         home_url('/employer-view-application/')
     );
@@ -7029,6 +8115,12 @@ function devhire_handle_employer_application_status() {
         wp_safe_redirect(home_url('/employer-login/'));
         exit;
     }
+
+    $return_url = devhire_get_employer_applicants_return_url(
+        isset($_POST['return_url'])
+            ? $_POST['return_url']
+            : ''
+    );
 
     $user = wp_get_current_user();
 
@@ -7179,6 +8271,7 @@ function devhire_handle_employer_application_status() {
             [
                 'application_id' => $application_id,
                 'status_updated' => '1',
+                'return_url'     => $return_url,
             ],
             home_url('/employer-view-application/')
         )

@@ -314,19 +314,21 @@ $companies = new WP_Query([
             <div class="pagination">
 
                 <?php
-                echo wp_kses_post(
-                    paginate_links([
-                        'total'   => $companies->max_num_pages,
-                        'current' => $paged,
+                $pagination = paginate_links([
+                    'total'   => $companies->max_num_pages,
+                    'current' => $paged,
 
-                        'add_args' => array_filter([
-                            'company_search' => $keyword,
-                        ]),
+                    'add_args' => array_filter([
+                        'company_search' => $keyword,
+                    ]),
 
-                        'prev_text' => '&larr; Previous',
-                        'next_text' => 'Next &rarr;',
-                    ])
-                );
+                    'prev_text' => '&larr; Previous',
+                    'next_text' => 'Next &rarr;',
+                ]);
+
+                if ($pagination) {
+                    echo wp_kses_post($pagination);
+                }
                 ?>
 
             </div>
