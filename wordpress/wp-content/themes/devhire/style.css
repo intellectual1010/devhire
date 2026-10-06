@@ -8053,3 +8053,28 @@ label[for="applicant-sort"] {
     background: rgba(34, 211, 238, 0.07);
     color: #a5f3fc;
 }
+
+
+/* ================================
+   Employer Dashboard Action Buttons Fix
+================================ */
+
+/* WordPress/browser button defaults can otherwise give the
+   Unpublish form button a white background. */
+.employer-dashboard .job-status-form .secondary-button {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    font: inherit;
+    font-weight: 400;
+    line-height: 1.6;
+}
+
+.employer-dashboard .job-status-form .secondary-button:hover,
+.employer-dashboard .job-status-form .secondary-button:focus-visible {
+    background: rgba(34, 211, 238, 0.08);
+    border-color: var(--primary);
+    color: var(--primary);
+}
