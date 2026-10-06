@@ -493,6 +493,39 @@ function devhire_candidate_profile_shortcode() {
         ? basename((string) get_attached_file($resume_id))
         : '';
 
+    /*
+     * Profile completeness.
+     * Keep these fields aligned with the Candidate Dashboard summary.
+     */
+    $profile_items = [
+        'Full Name'          => trim((string) $full_name),
+        'Email'              => trim((string) $user->user_email),
+        'Phone'              => trim((string) $phone),
+        'LinkedIn'           => trim((string) $linkedin),
+        'Location'           => trim((string) $location),
+        'Professional Title' => trim((string) $professional_title),
+        'Professional Bio'   => trim((string) $bio),
+        'Resume'             => trim((string) $resume_url),
+    ];
+
+    $missing_profile_items = [];
+
+    foreach ($profile_items as $profile_label => $profile_value) {
+        if (empty($profile_value)) {
+            $missing_profile_items[] = $profile_label;
+        }
+    }
+
+    $completed_profile_items =
+        count($profile_items) - count($missing_profile_items);
+
+    $profile_completeness = (int) round(
+        ($completed_profile_items / count($profile_items)) * 100
+    );
+
+    $profile_is_complete =
+        empty($missing_profile_items);
+
     ob_start();
 
     echo wp_kses_post($message);
@@ -568,6 +601,15 @@ function devhire_candidate_profile_shortcode() {
             <a
                 class="candidate-nav-link"
                 href="<?php echo esc_url(
+                    home_url('/saved-jobs/')
+                ); ?>"
+            >
+                Saved Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
                     get_post_type_archive_link('job')
                 ); ?>"
             >
@@ -586,6 +628,135 @@ function devhire_candidate_profile_shortcode() {
             </a>
 
         </nav>
+
+        <section class="candidate-profile-guidance">
+
+            <div class="candidate-profile-guidance-header">
+
+                <div>
+                    <span class="application-label">
+                        Profile Strength
+                    </span>
+
+                    <h2>
+                        <?php if ($profile_is_complete) : ?>
+                            Your profile is complete
+                        <?php else : ?>
+                            Complete your candidate profile
+                        <?php endif; ?>
+                    </h2>
+                </div>
+
+                <strong class="candidate-profile-percentage">
+                    <?php
+                    echo esc_html(
+                        $profile_completeness . '%'
+                    );
+                    ?>
+                </strong>
+
+            </div>
+
+            <div
+                class="candidate-profile-progress"
+                role="progressbar"
+                aria-label="Candidate profile completeness"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="<?php
+                echo esc_attr($profile_completeness);
+                ?>"
+            >
+                <span
+                    style="<?php
+                    echo esc_attr(
+                        'width: ' .
+                        $profile_completeness .
+                        '%;'
+                    );
+                    ?>"
+                ></span>
+            </div>
+
+            <?php if ($profile_is_complete) : ?>
+
+                <div class="candidate-profile-guidance-message complete">
+                    <strong>Ready to apply.</strong>
+                    Your professional information and resume are available
+                    for your DevHire applications.
+                </div>
+
+            <?php else : ?>
+
+                <div class="candidate-profile-guidance-message">
+
+                    <strong>
+                        Still needed:
+                    </strong>
+
+                    <div class="candidate-missing-fields">
+
+                        <?php foreach (
+                            $missing_profile_items as $missing_profile_item
+                        ) : ?>
+
+                            <span>
+                                <?php
+                                echo esc_html(
+                                    $missing_profile_item
+                                );
+                                ?>
+                            </span>
+
+                        <?php endforeach; ?>
+
+                    </div>
+
+                </div>
+
+            <?php endif; ?>
+
+            <div class="candidate-resume-status">
+
+                <div>
+                    <span class="candidate-resume-status-label">
+                        Resume
+                    </span>
+
+                    <strong>
+                        <?php
+                        echo $resume_url
+                            ? 'Uploaded'
+                            : 'Not uploaded';
+                        ?>
+                    </strong>
+                </div>
+
+                <?php if ($resume_url) : ?>
+
+                    <a
+                        class="secondary-button"
+                        href="<?php echo esc_url($resume_url); ?>"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        View Resume
+                    </a>
+
+                <?php else : ?>
+
+                    <a
+                        class="secondary-button"
+                        href="#profile-resume"
+                    >
+                        Upload Resume
+                    </a>
+
+                <?php endif; ?>
+
+            </div>
+
+        </section>
 
         <form
             method="post"

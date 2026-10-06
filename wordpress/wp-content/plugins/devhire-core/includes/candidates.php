@@ -802,6 +802,92 @@ function devhire_candidate_dashboard_shortcode() {
 
 
     /*
+     * Candidate profile summary.
+     */
+    $candidate_phone = sanitize_text_field(
+        get_user_meta(
+            $user->ID,
+            '_devhire_phone',
+            true
+        )
+    );
+
+    $candidate_linkedin = esc_url_raw(
+        get_user_meta(
+            $user->ID,
+            '_devhire_linkedin',
+            true
+        )
+    );
+
+    $candidate_location = sanitize_text_field(
+        get_user_meta(
+            $user->ID,
+            '_devhire_location',
+            true
+        )
+    );
+
+    $candidate_title = sanitize_text_field(
+        get_user_meta(
+            $user->ID,
+            '_devhire_professional_title',
+            true
+        )
+    );
+
+    $candidate_bio = sanitize_textarea_field(
+        get_user_meta(
+            $user->ID,
+            '_devhire_bio',
+            true
+        )
+    );
+
+    $candidate_resume_id = absint(
+        get_user_meta(
+            $user->ID,
+            '_devhire_resume_id',
+            true
+        )
+    );
+
+    $candidate_resume_url = $candidate_resume_id
+        ? wp_get_attachment_url($candidate_resume_id)
+        : '';
+
+    /*
+     * Calculate profile completeness from the fields used
+     * by the DevHire candidate profile.
+     */
+    $profile_fields = [
+        trim((string) $user->display_name),
+        trim((string) $user->user_email),
+        $candidate_phone,
+        $candidate_linkedin,
+        $candidate_location,
+        $candidate_title,
+        $candidate_bio,
+        $candidate_resume_url,
+    ];
+
+    $completed_profile_fields = 0;
+
+    foreach ($profile_fields as $profile_field) {
+        if (!empty($profile_field)) {
+            $completed_profile_fields++;
+        }
+    }
+
+    $profile_completeness = (int) round(
+        ($completed_profile_fields / count($profile_fields)) * 100
+    );
+
+    $profile_is_complete =
+        $profile_completeness === 100;
+
+
+    /*
      * Find applications belonging to this candidate.
      *
      * We support:
@@ -936,6 +1022,15 @@ function devhire_candidate_dashboard_shortcode() {
             <a
                 class="candidate-nav-link"
                 href="<?php echo esc_url(
+                    home_url('/saved-jobs/')
+                ); ?>"
+            >
+                Saved Jobs
+            </a>
+
+            <a
+                class="candidate-nav-link"
+                href="<?php echo esc_url(
                     get_post_type_archive_link('job')
                 ); ?>"
             >
@@ -954,6 +1049,168 @@ function devhire_candidate_dashboard_shortcode() {
             </a>
 
         </nav>
+
+        <section class="candidate-account-summary">
+
+            <div class="candidate-account-summary-main">
+
+                <div class="candidate-account-avatar" aria-hidden="true">
+                    <?php
+                    echo esc_html(
+                        strtoupper(
+                            substr(
+                                trim($user->display_name)
+                                    ? $user->display_name
+                                    : $user->user_login,
+                                0,
+                                1
+                            )
+                        )
+                    );
+                    ?>
+                </div>
+
+                <div class="candidate-account-details">
+
+                    <span class="application-label">
+                        Candidate Profile
+                    </span>
+
+                    <h2>
+                        <?php
+                        echo esc_html(
+                            $candidate_title
+                                ? $candidate_title
+                                : 'Add your professional title'
+                        );
+                        ?>
+                    </h2>
+
+                    <div class="candidate-account-meta">
+
+                        <span>
+                            <?php
+                            echo esc_html(
+                                $candidate_location
+                                    ? $candidate_location
+                                    : 'Location not added'
+                            );
+                            ?>
+                        </span>
+
+                        <span>
+                            <?php
+                            echo $candidate_resume_url
+                                ? 'Resume uploaded'
+                                : 'Resume missing';
+                            ?>
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="candidate-profile-completeness">
+
+                <div class="candidate-profile-completeness-heading">
+
+                    <span>
+                        Profile completeness
+                    </span>
+
+                    <strong>
+                        <?php
+                        echo esc_html(
+                            $profile_completeness . '%'
+                        );
+                        ?>
+                    </strong>
+
+                </div>
+
+                <div
+                    class="candidate-profile-progress"
+                    role="progressbar"
+                    aria-label="Candidate profile completeness"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="<?php
+                    echo esc_attr($profile_completeness);
+                    ?>"
+                >
+                    <span
+                        style="<?php
+                        echo esc_attr(
+                            'width: ' .
+                            $profile_completeness .
+                            '%;'
+                        );
+                        ?>"
+                    ></span>
+                </div>
+
+                <p>
+                    <?php if ($profile_is_complete) : ?>
+
+                        Your profile is ready for applications.
+
+                    <?php else : ?>
+
+                        Complete your profile to give employers
+                        more information about your experience.
+
+                    <?php endif; ?>
+                </p>
+
+                <a
+                    class="secondary-button"
+                    href="<?php echo esc_url(
+                        home_url('/candidate-profile/')
+                    ); ?>"
+                >
+                    <?php
+                    echo $profile_is_complete
+                        ? 'View Profile'
+                        : 'Complete Profile';
+                    ?>
+                </a>
+
+            </div>
+
+        </section>
+
+        <div class="candidate-saved-jobs-summary">
+
+            <div>
+                <span class="application-label">
+                    Job Shortlist
+                </span>
+
+                <h2>
+                    <span
+                        data-devhire-saved-jobs-count
+                    >0</span>
+                    Saved Jobs
+                </h2>
+
+                <p>
+                    Keep interesting opportunities in one place
+                    and return when you're ready to apply.
+                </p>
+            </div>
+
+            <a
+                class="secondary-button"
+                href="<?php echo esc_url(
+                    home_url('/saved-jobs/')
+                ); ?>"
+            >
+                View Saved Jobs
+            </a>
+
+        </div>
 
         <div class="dashboard-stats">
 

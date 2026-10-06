@@ -24,6 +24,17 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
+    function updateSavedJobsCount() {
+        document
+            .querySelectorAll(
+                "[data-devhire-saved-jobs-count]"
+            )
+            .forEach((element) => {
+                element.textContent =
+                    String(getSavedJobs().length);
+            });
+    }
+
     function isSaved(jobId) {
         return getSavedJobs().includes(
             Number(jobId)
@@ -92,6 +103,22 @@ document.addEventListener("DOMContentLoaded", () => {
         return result.data;
     }
 
+    updateSavedJobsCount();
+
+    window.addEventListener(
+        "devhireSavedJobsUpdated",
+        updateSavedJobsCount
+    );
+
+    window.addEventListener(
+        "storage",
+        (event) => {
+            if (event.key === STORAGE_KEY) {
+                updateSavedJobsCount();
+            }
+        }
+    );
+
     document
         .querySelectorAll(".devhire-save-job")
         .forEach((button) => {
@@ -126,7 +153,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         return;
                     }
-
 
                     const originalText =
                         button.textContent;
@@ -176,7 +202,6 @@ document.addEventListener("DOMContentLoaded", () => {
             );
         });
 
-
     /*
      * Saved Jobs page.
      */
@@ -188,7 +213,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (savedJobsContainer) {
         loadSavedJobs(savedJobsContainer);
     }
-
 
     async function loadSavedJobs(container) {
 
@@ -240,13 +264,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 title.appendChild(link);
                 content.appendChild(title);
 
-
                 const actions =
                     document.createElement("div");
 
                 actions.className =
                     "saved-job-actions";
-
 
                 const viewLink =
                     document.createElement("a");
@@ -257,7 +279,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 viewLink.textContent =
                     "View Job";
-
 
                 const removeButton =
                     document.createElement(
@@ -272,7 +293,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 removeButton.textContent =
                     "Remove";
-
 
                 removeButton.addEventListener(
                     "click",
@@ -296,7 +316,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     }
                 );
-
 
                 actions.appendChild(viewLink);
                 actions.appendChild(

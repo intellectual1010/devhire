@@ -51,9 +51,14 @@ add_action(
  */
 function devhire_saved_jobs_assets() {
 
+    $candidate_portal_page =
+        is_page('candidate-dashboard') ||
+        is_page('candidate-profile');
+
     if (
         !is_singular('job') &&
-        !is_page_template('page-saved-jobs.php')
+        !is_page_template('page-saved-jobs.php') &&
+        !$candidate_portal_page
     ) {
         return;
     }
@@ -62,7 +67,7 @@ function devhire_saved_jobs_assets() {
         'devhire-saved-jobs',
         DEVHIRE_CORE_URL . 'assets/js/saved-jobs.js',
         [],
-        '1.0.0',
+        '1.1.0',
         true
     );
 
